@@ -114,11 +114,12 @@ class MainWindow(QMainWindow):
         b_layout.setContentsMargins(4, 2, 4, 4)
         b_layout.setSpacing(4)
 
-        # ชื่อพนักงานที่สแกน
-        self.name_label = QLabel("พร้อมสแกนใบหน้า")
+        # ชื่อพนักงานที่สแกน (ว่างไว้เมื่อยังไม่มีคนสแกน)
+        self.name_label = QLabel("")
         self.name_label.setFont(QFont("Sans", 20, QFont.Bold))
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setWordWrap(True)
+        self.name_label.setMinimumHeight(32)
         b_layout.addWidget(self.name_label)
 
         # เวลาบันทึก
@@ -126,6 +127,7 @@ class MainWindow(QMainWindow):
         self.status_detail_label.setFont(QFont("Sans", 13))
         self.status_detail_label.setAlignment(Qt.AlignCenter)
         self.status_detail_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        self.status_detail_label.setMinimumHeight(22)
         b_layout.addWidget(self.status_detail_label)
 
         # ปุ่มลงทะเบียนใบหน้า
@@ -209,7 +211,7 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def _on_unknown(self):
         """เมื่อตรวจจับใบหน้าแล้วไม่พบในระบบ"""
-        if "พร้อมสแกน" in self.name_label.text():
+        if not self.name_label.text():
             # กรอบกล้องเปลี่ยนเป็นสีแดง
             self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {ACCENT_RED}; border-radius: 14px;")
 
@@ -222,12 +224,9 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(3000, self._reset_status)
 
     def _reset_status(self):
-        """รีเซ็ตกลับสู่สถานะพร้อมสแกน"""
+        """รีเซ็ตกลับสู่สถานะว่างพร้อมรอคนถัดไป (ไม่แสดงพร้อมสแกนใบหน้า)"""
         self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {BORDER_COLOR}; border-radius: 14px;")
-
-        self.name_label.setText("พร้อมสแกนใบหน้า")
-        self.name_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
-
+        self.name_label.setText("")
         self.status_detail_label.setText("")
 
     def keyPressEvent(self, event):
