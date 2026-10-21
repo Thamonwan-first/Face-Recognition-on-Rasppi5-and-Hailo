@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────
+# Docker Compose — Central Attendance Server
+# ─────────────────────────────────────────────────────────
+# Development:  docker compose up              (SQLite)
+# Production:   docker compose --profile prod up (PostgreSQL)
+# ─────────────────────────────────────────────────────────
+
+services:
+  # ── API Server ────────────────────────────────────────
+  server:
+    build: ./server/backend
+    container_name: attendance-server
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    env_file:
+      - ./server/backend/.env
+    volumes:
+      - server-data:/app/data         # SQLite DB + enrollment images
+      - ./server/certs:/app/certs:ro   # TLS certificates
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false                # optional — only when profile=prod
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8443/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── PostgreSQL (production profile) ───────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: attendance-db
+    restart: unless-stopped
+    profiles: ["prod"]
+    environment:
+      POSTGRES_DB: ${DB_NAME:-attendance}
+      POSTGRES_USER: ${DB_USER:-attendance_app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-attendance_app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Reverse Proxy (TLS termination + static dashboard) ─
+  caddy:
+    image: caddy:2-alpine
+    container_name: attendance-proxy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./server/frontend/dist:/srv/dashboard:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - server
+
+volumes:
+  server-data:
+  pg-data:
+  caddy-data:
+  caddy-config:

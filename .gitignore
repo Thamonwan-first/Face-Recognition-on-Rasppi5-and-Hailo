@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# SQLite databases (local kiosk data)
+*.db
+*.db-wal
+*.db-shm
+
+# HEF model files (large binaries — download or copy separately)
+*.hef
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Coverage / test artifacts
+htmlcov/
+.coverage
+.pytest_cache/

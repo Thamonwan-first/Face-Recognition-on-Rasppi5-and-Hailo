@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────
+# Kiosk Configuration — Edge AI Face Recognition Attendance
+# Copy to config.yaml and configure for this specific device
+# ─────────────────────────────────────────────────────────────
+
+device:
+  id: "kiosk-01"
+  name: "ตู้บันทึกเวลา ประตูหน้า (Main Entrance)"
+  direction: "AUTO"        # IN | OUT | AUTO
+
+server:
+  url: "https://192.168.1.100:8443"
+  api_key: "changeme-generate-with-openssl-rand-hex-32"
+
+recognition:
+  threshold: 0.55          # Cosine similarity threshold (0.50 - 0.65)
+  debounce_seconds: 30     # Prevent duplicate scans within N seconds
+  min_enroll_images: 3     # Minimum photos needed for face registration
+  max_enroll_images: 5     # Maximum photos
+
+models:
+  detect_model: "models/scrfd_2.5g.hef"        # or models/scrfd_10g.hef
+  embedding_model: "models/arcface_mobilefacenet.hef"
+
+camera:
+  width: 640
+  height: 480
+  fps: 30
+  device_index: 0
+  rotation: 0              # 0, 90, 180, 270 (rotate frame if camera is mounted rotated)
+
+sync:
+  interval_seconds: 10
+  batch_size: 50
+  user_sync_interval_seconds: 30
+  heartbeat_interval_seconds: 60
+
+database:
+  path: "data/kiosk.db"
+
+ui:
+  fullscreen: true
+  orientation: "portrait"  # portrait (จอแนวตั้ง 480x800)
+  width: 480
+  height: 800
+
+clock:
+  has_rtc: false           # Set to true if DS3231 RTC module is installed

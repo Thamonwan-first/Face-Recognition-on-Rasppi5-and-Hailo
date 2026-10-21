@@ -1,0 +1,10 @@
+# Kiosk Python dependencies
+# NOTE: hailo_platform is provided by the system package 'hailo-all'
+#       and is NOT installable via pip. Create venv with --system-site-packages.
+#       picamera2 is also a system package on Raspberry Pi OS.
+
+python-dotenv>=1.0
+numpy>=1.24
+opencv-python-headless>=4.8
+requests>=2.31
+PyQt5>=5.15
