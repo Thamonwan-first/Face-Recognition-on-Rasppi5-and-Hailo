@@ -95,7 +95,9 @@ class Camera:
         frame = None
         if self._backend == "picamera2":
             try:
-                frame = self._picam.capture_array()
+                raw = self._picam.capture_array()
+                # Picamera2 libcamera memory is BGR; convert to RGB for accurate skin tones
+                frame = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
             except Exception as e:
                 logger.warning("Picamera2 capture error: %s", e)
                 return None
