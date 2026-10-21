@@ -108,28 +108,37 @@ class MainWindow(QMainWindow):
         # ให้กล้องขยายพื้นที่แนวตั้งสูงสุด (stretch=1)
         layout.addWidget(self.cam_frame, stretch=1)
 
-        # ── 3. ผลการสแกน (ใครเป็นคนสแกน / ไม่พบข้อมูล) ────────────
-        self.result_card = QFrame()
-        self.result_card.setStyleSheet(
-            f"background-color: {CARD_BG}; border: 2px solid {BORDER_COLOR}; border-radius: 12px; padding: 8px;"
-        )
-        r_layout = QVBoxLayout(self.result_card)
-        r_layout.setSpacing(3)
-        r_layout.setContentsMargins(6, 6, 6, 6)
+        # ── 3. ด้านล่าง: ชื่อ + เวลา และ ปุ่มลงทะเบียน ──────────────
+        bottom_box = QWidget()
+        b_layout = QVBoxLayout(bottom_box)
+        b_layout.setContentsMargins(4, 2, 4, 4)
+        b_layout.setSpacing(4)
 
+        # ชื่อพนักงานที่สแกน
         self.name_label = QLabel("พร้อมสแกนใบหน้า")
-        self.name_label.setFont(QFont("Sans", 19, QFont.Bold))
+        self.name_label.setFont(QFont("Sans", 20, QFont.Bold))
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setWordWrap(True)
-        r_layout.addWidget(self.name_label)
+        b_layout.addWidget(self.name_label)
 
-        self.status_detail_label = QLabel("กรุณามองตรงที่กล้อง")
-        self.status_detail_label.setFont(QFont("Sans", 12))
+        # เวลาบันทึก
+        self.status_detail_label = QLabel("")
+        self.status_detail_label.setFont(QFont("Sans", 13))
         self.status_detail_label.setAlignment(Qt.AlignCenter)
         self.status_detail_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-        r_layout.addWidget(self.status_detail_label)
+        b_layout.addWidget(self.status_detail_label)
 
-        layout.addWidget(self.result_card)
+        # ปุ่มลงทะเบียนใบหน้า
+        self.enroll_btn = QPushButton("📸 ลงทะเบียนใบหน้า")
+        self.enroll_btn.setFont(QFont("Sans", 12, QFont.Bold))
+        self.enroll_btn.setMinimumHeight(40)
+        self.enroll_btn.setStyleSheet(
+            f"background-color: {ACCENT_BLUE}; color: white; border-radius: 8px; border: none; padding: 4px;"
+        )
+        self.enroll_btn.clicked.connect(self._open_enrollment)
+        b_layout.addWidget(self.enroll_btn)
+
+        layout.addWidget(bottom_box)
 
     def _start_clock(self):
         self._clock_timer = QTimer(self)
@@ -187,14 +196,13 @@ class MainWindow(QMainWindow):
         now_time = datetime.now().strftime("%H:%M:%S")
 
         # กรอบกล้องเปลี่ยนเป็นสีเขียว
-        self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {ACCENT_GREEN}; border-radius: 16px;")
-        self.result_card.setStyleSheet(f"background-color: {CARD_BG}; border: 2px solid {ACCENT_GREEN}; border-radius: 14px; padding: 12px;")
+        self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {ACCENT_GREEN}; border-radius: 14px;")
 
         self.name_label.setText(f"✅ {name}")
         self.name_label.setStyleSheet(f"color: {ACCENT_GREEN};")
 
         self.status_detail_label.setText(f"บันทึก: {dir_text} • เวลา {now_time}")
-        self.status_detail_label.setStyleSheet(f"color: {TEXT_PRIMARY}; font-weight: bold;")
+        self.status_detail_label.setStyleSheet("color: #ffffff; font-weight: bold;")
 
         QTimer.singleShot(4000, self._reset_status)
 
@@ -203,27 +211,24 @@ class MainWindow(QMainWindow):
         """เมื่อตรวจจับใบหน้าแล้วไม่พบในระบบ"""
         if "พร้อมสแกน" in self.name_label.text():
             # กรอบกล้องเปลี่ยนเป็นสีแดง
-            self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {ACCENT_RED}; border-radius: 16px;")
-            self.result_card.setStyleSheet(f"background-color: {CARD_BG}; border: 2px solid {ACCENT_RED}; border-radius: 14px; padding: 12px;")
+            self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {ACCENT_RED}; border-radius: 14px;")
 
             self.name_label.setText("❌ ไม่พบข้อมูลใบหน้า")
             self.name_label.setStyleSheet(f"color: {ACCENT_RED};")
 
-            self.status_detail_label.setText("ไม่พบข้อมูลพนักงานในระบบ กรุณาติดต่อฝ่ายบุคคล")
+            self.status_detail_label.setText("ไม่พบข้อมูลในระบบ")
             self.status_detail_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
 
             QTimer.singleShot(3000, self._reset_status)
 
     def _reset_status(self):
         """รีเซ็ตกลับสู่สถานะพร้อมสแกน"""
-        self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {BORDER_COLOR}; border-radius: 16px;")
-        self.result_card.setStyleSheet(f"background-color: {CARD_BG}; border: 2px solid {BORDER_COLOR}; border-radius: 14px; padding: 12px;")
+        self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {BORDER_COLOR}; border-radius: 14px;")
 
         self.name_label.setText("พร้อมสแกนใบหน้า")
         self.name_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
 
-        self.status_detail_label.setText("กรุณามองตรงที่กล้อง")
-        self.status_detail_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        self.status_detail_label.setText("")
 
     def keyPressEvent(self, event):
         """กดปุ่ม E บนคีย์บอร์ดเพื่อเปิดหน้าต่างลงทะเบียนใบหน้า (Admin Shortcut)"""
