@@ -67,65 +67,64 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(6)
 
-        # ── 1. ส่วนเวลา (Clock & Date) ───────────────────────────
+        # ── 1. ส่วนเวลา (Clock & Date - แถวแนวนอนกะทัดรัด) ────────
         time_card = QFrame()
         time_card.setStyleSheet(
-            f"background-color: {CARD_BG}; border-radius: 12px; padding: 6px;"
+            f"background-color: {CARD_BG}; border-radius: 10px;"
         )
-        t_layout = QVBoxLayout(time_card)
-        t_layout.setSpacing(2)
-        t_layout.setContentsMargins(6, 6, 6, 6)
+        t_layout = QHBoxLayout(time_card)
+        t_layout.setContentsMargins(14, 6, 14, 6)
 
         self.clock_label = QLabel("00:00:00")
-        self.clock_label.setFont(QFont("Monospace", 26, QFont.Bold))
-        self.clock_label.setAlignment(Qt.AlignCenter)
+        self.clock_label.setFont(QFont("Monospace", 22, QFont.Bold))
         self.clock_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
         t_layout.addWidget(self.clock_label)
 
+        t_layout.addStretch()
+
         self.date_label = QLabel("")
         self.date_label.setFont(QFont("Sans", 12))
-        self.date_label.setAlignment(Qt.AlignCenter)
         self.date_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
         t_layout.addWidget(self.date_label)
 
         layout.addWidget(time_card)
 
-        # ── 2. หน้าจอกล้อง (Live Camera Preview) ───────────────────
+        # ── 2. หน้าจอกล้อง (Live Camera Preview - ขยายสูงเต็มตา) ──
         self.cam_frame = QFrame()
         self.cam_frame.setStyleSheet(
-            f"background-color: #000000; border: 3px solid {BORDER_COLOR}; border-radius: 16px;"
+            f"background-color: #000000; border: 3px solid {BORDER_COLOR}; border-radius: 14px;"
         )
         c_layout = QVBoxLayout(self.cam_frame)
-        c_layout.setContentsMargins(4, 4, 4, 4)
+        c_layout.setContentsMargins(2, 2, 2, 2)
 
         self.cam_label = QLabel("กำลังเริ่มกล้อง...")
         self.cam_label.setAlignment(Qt.AlignCenter)
         self.cam_label.setStyleSheet("border-radius: 12px; background-color: #000000;")
         c_layout.addWidget(self.cam_label)
 
-        # ให้กล้องขยายพื้นที่ส่วนใหญ่ของจอแนวตั้ง
+        # ให้กล้องขยายพื้นที่แนวตั้งสูงสุด (stretch=1)
         layout.addWidget(self.cam_frame, stretch=1)
 
         # ── 3. ผลการสแกน (ใครเป็นคนสแกน / ไม่พบข้อมูล) ────────────
         self.result_card = QFrame()
         self.result_card.setStyleSheet(
-            f"background-color: {CARD_BG}; border: 2px solid {BORDER_COLOR}; border-radius: 14px; padding: 12px;"
+            f"background-color: {CARD_BG}; border: 2px solid {BORDER_COLOR}; border-radius: 12px; padding: 8px;"
         )
         r_layout = QVBoxLayout(self.result_card)
-        r_layout.setSpacing(4)
-        r_layout.setContentsMargins(8, 8, 8, 8)
+        r_layout.setSpacing(3)
+        r_layout.setContentsMargins(6, 6, 6, 6)
 
         self.name_label = QLabel("พร้อมสแกนใบหน้า")
-        self.name_label.setFont(QFont("Sans", 20, QFont.Bold))
+        self.name_label.setFont(QFont("Sans", 19, QFont.Bold))
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setWordWrap(True)
         r_layout.addWidget(self.name_label)
 
         self.status_detail_label = QLabel("กรุณามองตรงที่กล้อง")
-        self.status_detail_label.setFont(QFont("Sans", 13))
+        self.status_detail_label.setFont(QFont("Sans", 12))
         self.status_detail_label.setAlignment(Qt.AlignCenter)
         self.status_detail_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
         r_layout.addWidget(self.status_detail_label)
@@ -153,7 +152,32 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(QImage)
     def _update_frame(self, qimg):
-        pix = QPixmap.fromImage(qimg).scaled(self.cam_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        target_size = self.cam_label.size()
+        tw, th = target_size.width(), target_size.height()
+
+        if tw <= 0 or th <= 0:
+            return
+
+        qw, qh = qimg.width(), qimg.height()
+        target_ratio = tw / th
+        source_ratio = qw / qh
+
+        # Center-Crop: ตัดส่วนเกินซ้าย-ขวาออก เพื่อให้ได้อัตราส่วนแนวตั้งโดยหน้าไม่ยืด
+        if source_ratio > target_ratio:
+            crop_w = int(qh * target_ratio)
+            crop_h = qh
+            crop_x = (qw - crop_w) // 2
+            crop_y = 0
+        else:
+            crop_w = qw
+            crop_h = int(qw / target_ratio)
+            crop_x = 0
+            crop_y = (qh - crop_h) // 2
+
+        cropped = qimg.copy(crop_x, crop_y, crop_w, crop_h)
+        pix = QPixmap.fromImage(cropped).scaled(
+            target_size, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+        )
         self.cam_label.setPixmap(pix)
 
     @pyqtSlot(str, float, str)
