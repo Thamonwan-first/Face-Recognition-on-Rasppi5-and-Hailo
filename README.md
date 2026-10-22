@@ -250,12 +250,12 @@ npm run dev
 |---|---|:---:|
 | **1-2** | กำหนดขอบเขตโครงการ, ประกอบและตั้งค่า Pi 5 / Hailo-8 / Camera / OS, วางโครงสร้างโปรเจกต์ | ✅ เรียบร้อย |
 | **3-4** | ติดตั้ง Face Detection (SCRFD) และ 5-Point Alignment บนชิป Hailo-8, สคริปต์ตรวจจับสด, Fallback บนคอมพิวเตอร์ | ✅ เรียบร้อย |
-| **5-6** | ติดตั้ง Feature Extraction (ArcFace MobileFaceNet), ลงทะเบียนใบหน้าที่ Kiosk, ฐานข้อมูล SQLite WAL | 🟡 กำลังดำเนินการ |
-| **7-8** | ปรับจูน Cosine Similarity Threshold, ทดสอบ FAR/FRR บนแกลเลอรีจำลอง, ส่งมอบ MVP กลางภาค | แผนงานถัดไป |
+| **5-6** | ติดตั้ง Feature Extraction (ArcFace MobileFaceNet), ลงทะเบียนใบหน้าที่ Kiosk, ฐานข้อมูล SQLite WAL | ✅ เรียบร้อย |
+| **7-8** | ปรับจูน Cosine Similarity Threshold, ระบบเปรียบเทียบใบหน้า Matcher, ส่งมอบ MVP กลางภาค | ✅ เรียบร้อย |
 | **8-9** | พัฒนา FastAPI REST API (Python), Database Schema (PostgreSQL/SQLite), Docker Compose | ✅ เรียบร้อย |
-| **9-10** | พัฒนา PyQt5 Touchscreen UI สำหรับจอแสดงผล 7 นิ้วแนวตั้ง (Portrait 480x800) | ✅ สร้าง UI หลักแล้ว |
-| **10-11** | พัฒนาระบบ Offline-first Sync (Outbox Worker, Pull Sync, Heartbeat, Web Enrollment Job) | 🟡 สร้าง Skeleton แล้ว |
-| **11-13** | พัฒนา แดชบอร์ดกลางด้วย React + Vite (Devices, Users, Attendance Log, Analytics, Audit) | ✅ สร้างหน้าเว็บครบแล้ว |
-| **13-14** | การทดสอบรวมระบบ (Latency, Stress Test 24-48 ชม., ทดสอบตัดสัญญาณเครือข่ายแล้วกู้คืน) | แผนงานถัดไป |
-| **14-15** | การทดสอบความเสถียร, เตรียมคู่มือการติดตั้งเครื่องใหม่, จัดทำรายงานและสื่อนำเสนอ | แผนงานถัดไป |
-| **16** | นำเสนอโครงการและส่งมอบระบบ | แผนงานถัดไป |
+| **9-10** | พัฒนา PyQt5 Touchscreen UI สำหรับจอแสดงผล 7 นิ้วแนวตั้ง (Portrait 480x800), ระบบไร้สัมผัส First-In Last-Out | ✅ เรียบร้อย |
+| **10-11** | พัฒนาระบบ Offline-first Sync (Outbox Worker, User Pull Sync, Heartbeat, Timezone Reconciliation) | ✅ เรียบร้อย |
+| **11-13** | พัฒนา แดชบอร์ดกลางด้วย React 18 + Vite (Devices, Users, Attendance Log, Analytics, Audit) | ✅ เรียบร้อย |
+| **13-14** | การทดสอบรวมระบบจริง (End-to-End Test, Latency, ทดสอบตัดสัญญาณเครือข่ายแล้วกู้คืน) | 🟡 กำลังดำเนินการ |
+| **14-15** | การทดสอบความเสถียร 24-48 ชม., จัดทำคู่มือการติดตั้งและการใช้งานระบบ, จัดทำรายงาน | แผนงานถัดไป |
+| **16** | นำเสนอโครงงานสหกิจศึกษาและส่งมอบระบบ | แผนงานถัดไป |
