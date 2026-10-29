@@ -1,26 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
-
-function formatThaiDate(dateStr) {
-  if (!dateStr || dateStr === '-') return '-';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-}
-
-function formatThaiTime(isoStr) {
-  if (!isoStr || isoStr === '-') return '-';
-  try {
-    const utcStr = isoStr.endsWith('Z') || isoStr.includes('+') ? isoStr : `${isoStr}Z`;
-    return new Date(utcStr).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' น.';
-  } catch {
-    return isoStr;
-  }
-}
+import { formatThaiDate, formatThaiTime } from '../utils/date';
 
 export default function AttendancePage() {
   const [startDate, setStartDate] = useState('');

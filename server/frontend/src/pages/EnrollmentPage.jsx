@@ -2,12 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
-
-function formatThaiDateTime(dateStr) {
-  if (!dateStr) return '-';
-  const utcStr = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`;
-  return new Date(utcStr).toLocaleString('th-TH');
-}
+import { formatThaiDateTime } from '../utils/date';
 
 export default function EnrollmentPage() {
   const queryClient = useQueryClient();

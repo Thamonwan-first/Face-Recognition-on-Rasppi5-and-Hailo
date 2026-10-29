@@ -1,12 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
-
-function formatThaiDateTime(dateStr) {
-  if (!dateStr) return '-';
-  const utcStr = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`;
-  return new Date(utcStr).toLocaleString('th-TH');
-}
+import { formatThaiDateTime } from '../utils/date';
 
 export default function AuditPage() {
   const { data: logs, isLoading, error } = useQuery({

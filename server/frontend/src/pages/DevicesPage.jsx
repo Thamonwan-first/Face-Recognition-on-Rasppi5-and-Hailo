@@ -2,12 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
-
-function formatThaiDateTime(dateStr) {
-  if (!dateStr) return 'ไม่เคย';
-  const utcStr = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`;
-  return new Date(utcStr).toLocaleString('th-TH');
-}
+import { formatThaiDateTime } from '../utils/date';
 
 export default function DevicesPage() {
   const { data: devices, isLoading, error } = useQuery({
@@ -43,7 +38,7 @@ export default function DevicesPage() {
               <li>🎯 FPS กล้อง: {device.fps != null ? `${device.fps}` : '-'}</li>
               <li>
                 ⏰ ออนไลน์ล่าสุด:{' '}
-                {formatThaiDateTime(device.last_seen)}
+                {formatThaiDateTime(device.last_seen, 'ไม่เคย')}
               </li>
             </ul>
           </div>
