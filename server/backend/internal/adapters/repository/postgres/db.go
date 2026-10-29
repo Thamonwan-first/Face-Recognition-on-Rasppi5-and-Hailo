@@ -172,12 +172,17 @@ func createSchema(db *sql.DB) error {
 }
 
 func seedDefaults(db *sql.DB) error {
+	isProd := os.Getenv("ENV") == "production" || os.Getenv("GIN_MODE") == "release"
+
 	// 1. Seed Admin
 	var count int
 	_ = db.QueryRow("SELECT COUNT(*) FROM admins WHERE username = 'admin'").Scan(&count)
 	if count == 0 {
 		defaultPass := os.Getenv("ADMIN_DEFAULT_PASSWORD")
 		if defaultPass == "" {
+			if isProd {
+				return fmt.Errorf("ADMIN_DEFAULT_PASSWORD environment variable is required in production mode")
+			}
 			defaultPass = "admin1234"
 			fmt.Println("⚠️ NOTICE: Created default admin 'admin' with initial password 'admin1234'. Change this immediately.")
 		}
@@ -188,11 +193,15 @@ func seedDefaults(db *sql.DB) error {
 		)
 	}
 
-	// 2. Seed Default Kiosk
+	// 2. Seed Default Kiosk (only if initial development mode or key provided)
 	var devCount int
 	_ = db.QueryRow("SELECT COUNT(*) FROM devices WHERE id = 'kiosk-01'").Scan(&devCount)
-	if devCount == 0 {
-		kioskHash := hasher.HashAPIKey("changeme-generate-with-openssl-rand-hex-32")
+	if devCount == 0 && !isProd {
+		kioskKey := os.Getenv("DEFAULT_KIOSK_API_KEY")
+		if kioskKey == "" {
+			kioskKey = "changeme-generate-with-openssl-rand-hex-32"
+		}
+		kioskHash := hasher.HashAPIKey(kioskKey)
 		_, _ = db.Exec(
 			"INSERT INTO devices (id, name, location, direction, api_key_hash, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)",
 			"kiosk-01", "kiosk-01", "", "AUTO", kioskHash, "offline",
