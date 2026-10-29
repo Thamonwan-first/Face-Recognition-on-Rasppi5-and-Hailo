@@ -26,8 +26,10 @@ func NewAuthUseCase(adminRepo ports.AdminRepository, auditRepo ports.AuditReposi
 
 type LoginResponse struct {
 	AccessToken string        `json:"access_token"`
+	Token       string        `json:"token"`
 	TokenType   string        `json:"token_type"`
 	User        *domain.Admin `json:"user"`
+	Admin       *domain.Admin `json:"admin"`
 }
 
 func (uc *AuthUseCase) Login(ctx context.Context, username, password string) (*LoginResponse, error) {
@@ -59,8 +61,10 @@ func (uc *AuthUseCase) Login(ctx context.Context, username, password string) (*L
 
 	return &LoginResponse{
 		AccessToken: accessToken,
+		Token:       accessToken,
 		TokenType:   "bearer",
 		User:        admin,
+		Admin:       admin,
 	}, nil
 }
 

@@ -16,9 +16,13 @@ export default function LoginPage() {
 
     try {
       const data = await api.post('/auth/login', { username, password });
-      localStorage.setItem('token', data.token);
-      if (data.admin) {
-        localStorage.setItem('user', JSON.stringify(data.admin));
+      const token = data.token || data.access_token;
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+      const admin = data.admin || data.user;
+      if (admin) {
+        localStorage.setItem('user', JSON.stringify(admin));
       }
       navigate('/devices');
     } catch (err) {
