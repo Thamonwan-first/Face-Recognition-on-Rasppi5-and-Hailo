@@ -23,7 +23,13 @@ server/backend/
 │   │   ├── enrollment_usecase.go
 │   │   └── audit_usecase.go
 │   ├── adapters/
-│   │   ├── repository/sqlite/      # SQLite Data Layer
+│   │   ├── repository/postgres/    # PostgreSQL Adapter (Production standard)
+│   │   │   ├── db.go
+│   │   │   ├── admin_device_repo.go
+│   │   │   ├── user_repo.go
+│   │   │   ├── attendance_repo.go
+│   │   │   └── enrollment_audit_repo.go
+│   │   ├── repository/sqlite/      # SQLite Adapter (Local development / offline)
 │   │   │   ├── db.go
 │   │   │   ├── admin_device_repo.go
 │   │   │   ├── user_repo.go
