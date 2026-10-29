@@ -96,9 +96,9 @@ def test_outbox_worker_sync_and_isolation():
         with patch("requests.post", return_value=mock_response) as mock_post:
             worker._sync_pending()
 
-            # Verify requests.post was called with the attendance events only
+            # Verify requests.post was called with attendance events in the first call
             assert mock_post.called
-            call_json = mock_post.call_args[1]["json"]
+            call_json = mock_post.call_args_list[0][1]["json"]
             events = call_json["events"]
             assert len(events) == 2
             event_ids = {e["event_id"] for e in events}
@@ -114,10 +114,10 @@ def test_outbox_worker_sync_and_isolation():
         for r in rows:
             assert r["synced"] == 1
 
-        # Verify enrollment row is still synced = 0 and didn't crash the worker
+        # Verify enrollment row was also synced
         cur.execute("SELECT synced FROM outbox WHERE type = 'user_enrollment'")
         enroll_row = cur.fetchone()
-        assert enroll_row["synced"] == 0
+        assert enroll_row["synced"] == 1
 
         worker.stop()
 

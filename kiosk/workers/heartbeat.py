@@ -81,7 +81,7 @@ class HeartbeatWorker:
         }
 
         try:
-            requests.post(url, json=payload, headers=headers, timeout=5, verify=self.config.ssl_verify)
+            requests.post(url, json=payload, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
             logger.debug("Heartbeat sent successfully")
         except Exception as e:
             logger.debug("Heartbeat server unreachable: %s", e)

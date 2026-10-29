@@ -54,7 +54,7 @@ class EnrollmentWorker:
         headers = {"X-API-Key": self.config.api_key}
 
         try:
-            resp = requests.get(claim_url, headers=headers, timeout=5, verify=self.config.ssl_verify)
+            resp = requests.get(claim_url, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
             if resp.status_code != 200:
                 return
             data = resp.json()
@@ -129,7 +129,7 @@ class EnrollmentWorker:
                 "embedding_b64": emb_b64,
                 "quality_score": 1.0,
             }
-            res_post = requests.post(result_url, json=payload, headers={"X-API-Key": self.config.api_key}, timeout=5, verify=self.config.ssl_verify)
+            res_post = requests.post(result_url, json=payload, headers={"X-API-Key": self.config.api_key}, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
             if res_post.status_code == 200:
                 logger.info("Successfully completed enrollment job %s from %d image(s)! Embedding stored on server.", job_id, len(captured_embeddings))
                 if self.on_enrollment_done:

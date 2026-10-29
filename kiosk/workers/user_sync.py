@@ -70,7 +70,7 @@ class UserSyncWorker:
         headers = {"X-API-Key": self.config.api_key}
 
         try:
-            res = requests.get(url, headers=headers, timeout=5, verify=self.config.ssl_verify)
+            res = requests.get(url, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
             if res.status_code != 200:
                 return
 

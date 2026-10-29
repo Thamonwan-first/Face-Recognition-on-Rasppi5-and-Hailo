@@ -81,11 +81,12 @@ class OutboxWorker:
 
         headers = {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
 
+        ssl_verify = getattr(self.config, "ssl_verify", False)
         # 1. Sync Attendance Events
         if events:
             url = f"{self.config.server_url.rstrip('/')}/sync/events"
             try:
-                res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=self.config.ssl_verify)
+                res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=ssl_verify)
                 if res.status_code == 200:
                     cur.execute(
                         f"UPDATE outbox SET synced = 1 WHERE id IN ({','.join(['?']*len(valid_row_ids))})",
@@ -123,7 +124,7 @@ class OutboxWorker:
                             p["embedding_b64"] = base64.b64encode(raw_bytes).decode("utf-8")
 
                 enroll_url = f"{self.config.server_url.rstrip('/')}/sync/enrollment"
-                res = requests.post(enroll_url, json=p, headers=headers, timeout=5, verify=self.config.ssl_verify)
+                res = requests.post(enroll_url, json=p, headers=headers, timeout=5, verify=ssl_verify)
                 if res.status_code == 200:
                     cur.execute("UPDATE outbox SET synced = 1 WHERE id = ?", (row_id,))
                     conn.commit()

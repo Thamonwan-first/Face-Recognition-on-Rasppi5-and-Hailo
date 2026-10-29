@@ -12,14 +12,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.db.schema import init_db
-from src.db.repository import AttendanceRepository
-from src.pipeline.matcher import find_best_match, cosine_similarity
-from src.pipeline.alignment import align_face
-from src.config import config
+from database import init_db, Database
+from matcher import find_best_match, cosine_similarity
+from alignment import align_face
+from config import config
 
 
-def run_e2e_tests():
+def test_pipeline_e2e():
     print("==================================================")
     print("🧪 Running Face Recognition & Attendance Pipeline Test")
     print("==================================================")
@@ -30,7 +29,7 @@ def run_e2e_tests():
         test_db_path.unlink()
 
     conn = init_db(test_db_path)
-    repo = AttendanceRepository(conn)
+    repo = Database(conn)
     print("✓ 1. SQLite Database initialized with WAL schema")
 
     # 2. Test User Enrollment with 512-d ArcFace Vector
@@ -161,4 +160,4 @@ def run_e2e_tests():
 
 
 if __name__ == "__main__":
-    run_e2e_tests()
+    test_pipeline_e2e()
