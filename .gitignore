@@ -1,3 +1,7 @@
+# Go binaries
+bin/
+*.exe
+
 # Python
 __pycache__/
 *.py[cod]

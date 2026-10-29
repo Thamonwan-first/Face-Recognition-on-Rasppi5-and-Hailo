@@ -1,20 +1,16 @@
-FROM python:3.11-slim
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server cmd/server/main.go
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app/ ./app/
-
-RUN mkdir -p data
+FROM alpine:latest
+WORKDIR /app
+RUN apk --no-cache add ca-certificates tzdata
+COPY --from=builder /app/server .
 
 EXPOSE 8443
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8443"]
+CMD ["/app/server"]
