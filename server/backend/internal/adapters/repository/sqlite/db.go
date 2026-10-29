@@ -67,7 +67,6 @@ func createSchema(db *sql.DB) error {
 		created_at DATETIME,
 		revoked_at DATETIME
 	);
-	CREATE INDEX IF NOT EXISTS idx_devices_api_key_hash ON devices(api_key_hash);
 
 	CREATE TABLE IF NOT EXISTS device_state (
 		device_id TEXT PRIMARY KEY,
@@ -151,6 +150,14 @@ func createSchema(db *sql.DB) error {
 		detail TEXT,
 		created_at DATETIME
 	);
+
+	-- Performance Indexes for O(1) and O(log N) lookups
+	CREATE INDEX IF NOT EXISTS idx_devices_api_key_hash ON devices(api_key_hash);
+	CREATE INDEX IF NOT EXISTS idx_users_version ON users(version);
+	CREATE INDEX IF NOT EXISTS idx_user_embeddings_user_id ON user_embeddings(user_id);
+	CREATE INDEX IF NOT EXISTS idx_pairs_user_workdate_status ON attendance_pairs(user_id, work_date, status);
+	CREATE INDEX IF NOT EXISTS idx_pairs_workdate ON attendance_pairs(work_date);
+	CREATE INDEX IF NOT EXISTS idx_attendance_events_user_created ON attendance_events(user_id, created_at);
 	`
 	_, err := db.Exec(schema)
 	return err

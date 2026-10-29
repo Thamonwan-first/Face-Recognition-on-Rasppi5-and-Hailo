@@ -60,6 +60,7 @@ type User struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	HasEmbedding bool      `json:"has_embedding"`
+	RawEmbedding []byte    `json:"-"`
 }
 
 type UserEmbedding struct {

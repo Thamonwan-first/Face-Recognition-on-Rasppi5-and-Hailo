@@ -98,9 +98,8 @@ func (uc *SyncUseCase) GetUsersSince(ctx context.Context, sinceVersion int) (*Us
 			Version:    u.Version,
 		}
 
-		emb, _ := uc.userRepo.GetEmbedding(ctx, u.ID)
-		if emb != nil && len(emb.Embedding) > 0 {
-			b64 := base64.StdEncoding.EncodeToString(emb.Embedding)
+		if len(u.RawEmbedding) > 0 {
+			b64 := base64.StdEncoding.EncodeToString(u.RawEmbedding)
 			item.EmbeddingB64 = &b64
 		}
 		items = append(items, item)

@@ -62,9 +62,14 @@ class RecognitionWorker(QThread):
         self.reload_gallery()
 
     def reload_gallery(self):
-        """Reload user embeddings from database into RAM."""
+        """Reload user embeddings from database into RAM with pre-stacked matrix for O(1) matching overhead."""
         active = self.db.load_active_gallery()
-        self.gallery_cache = [(u["user_id"], u["embedding"]) for u in active]
+        user_ids = [u["user_id"] for u in active]
+        if active:
+            matrix = np.asarray([u["embedding"] for u in active], dtype=np.float32)
+            self.gallery_cache = (user_ids, matrix)
+        else:
+            self.gallery_cache = ([], None)
         self.user_lookup = {u["user_id"]: u for u in active}
 
     def set_direction(self, direction):

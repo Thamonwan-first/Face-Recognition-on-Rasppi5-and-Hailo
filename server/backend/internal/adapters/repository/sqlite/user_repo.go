@@ -121,10 +121,13 @@ func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
 }
 
 func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*domain.User, error) {
+	// Single JOIN query solves the N+1 problem: O(1) query instead of O(N) queries
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
-	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
+	       (e.id IS NOT NULL) as has_embedding,
+	       e.embedding
 	FROM users u
+	LEFT JOIN user_embeddings e ON u.id = e.user_id
 	WHERE u.version > ?
 	ORDER BY u.version ASC
 	`
@@ -136,11 +139,28 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*d
 
 	var users []*domain.User
 	for rows.Next() {
-		u, err := scanUser(rows)
-		if err != nil {
+		var u domain.User
+		var empID, title, fName, lName, dept sql.NullString
+		var deletedAt sql.NullTime
+		var rawEmb []byte
+
+		if err := rows.Scan(
+			&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding, &rawEmb,
+		); err != nil {
 			return nil, err
 		}
-		users = append(users, u)
+
+		u.EmployeeID = empID.String
+		u.Title = title.String
+		u.FirstName = fName.String
+		u.LastName = lName.String
+		u.Department = dept.String
+		if deletedAt.Valid {
+			u.DeletedAt = &deletedAt.Time
+		}
+		u.RawEmbedding = rawEmb
+
+		users = append(users, &u)
 	}
 	return users, nil
 }

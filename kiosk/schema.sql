@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS attendance_events (
 );
 CREATE INDEX IF NOT EXISTS idx_att_user ON attendance_events(user_id);
 CREATE INDEX IF NOT EXISTS idx_att_created ON attendance_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_att_user_created ON attendance_events(user_id, created_at DESC);
 
 -- 4. Outbox (Offline-first transaction queue for sync to server)
 CREATE TABLE IF NOT EXISTS outbox (
