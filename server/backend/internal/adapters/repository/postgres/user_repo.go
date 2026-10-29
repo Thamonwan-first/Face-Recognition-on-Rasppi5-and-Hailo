@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 )
 
 type userRepo struct {
@@ -16,7 +16,7 @@ func NewUserRepository(db *sql.DB) ports.UserRepository {
 	return &userRepo{db: db}
 }
 
-func (r *userRepo) GetByID(ctx context.Context, id string) (*domain.User, error) {
+func (r *userRepo) GetByID(ctx context.Context, id string) (*entity.User, error) {
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
@@ -27,7 +27,7 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*domain.User, error)
 	return scanUser(row)
 }
 
-func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*domain.User, error) {
+func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*entity.User, error) {
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
@@ -38,7 +38,7 @@ func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*dom
 	return scanUser(row)
 }
 
-func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*domain.User, error) {
+func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
@@ -56,7 +56,7 @@ func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*domain.Use
 	}
 	defer rows.Close()
 
-	var users []*domain.User
+	var users []*entity.User
 	for rows.Next() {
 		u, err := scanUser(rows)
 		if err != nil {
@@ -67,7 +67,7 @@ func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*domain.Use
 	return users, nil
 }
 
-func (r *userRepo) Create(ctx context.Context, u *domain.User) error {
+func (r *userRepo) Create(ctx context.Context, u *entity.User) error {
 	query := `
 	INSERT INTO users (id, employee_id, title, first_name, last_name, name, department, status, version, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (SELECT COALESCE(MAX(version), 0) + 1 FROM users), $9, $10)
@@ -78,7 +78,7 @@ func (r *userRepo) Create(ctx context.Context, u *domain.User) error {
 	return err
 }
 
-func (r *userRepo) Update(ctx context.Context, u *domain.User) error {
+func (r *userRepo) Update(ctx context.Context, u *entity.User) error {
 	query := `
 	UPDATE users SET
 		employee_id = $1, title = $2, first_name = $3, last_name = $4, name = $5, department = $6, status = $7,
@@ -113,7 +113,7 @@ func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
 	return int(maxV.Int64), nil
 }
 
-func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*domain.User, error) {
+func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*entity.User, error) {
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (e.id IS NOT NULL) as has_embedding,
@@ -129,9 +129,9 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*d
 	}
 	defer rows.Close()
 
-	var users []*domain.User
+	var users []*entity.User
 	for rows.Next() {
-		var u domain.User
+		var u entity.User
 		var empID, title, fName, lName, dept sql.NullString
 		var deletedAt sql.NullTime
 		var rawEmb []byte
@@ -157,7 +157,7 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*d
 	return users, nil
 }
 
-func (r *userRepo) SaveEmbedding(ctx context.Context, emb *domain.UserEmbedding) error {
+func (r *userRepo) SaveEmbedding(ctx context.Context, emb *entity.UserEmbedding) error {
 	query := `
 	INSERT INTO user_embeddings (id, user_id, embedding, model_version, source, device_id, quality_score, created_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -175,18 +175,18 @@ func (r *userRepo) SaveEmbedding(ctx context.Context, emb *domain.UserEmbedding)
 	return err
 }
 
-func (r *userRepo) GetEmbedding(ctx context.Context, userID string) (*domain.UserEmbedding, error) {
+func (r *userRepo) GetEmbedding(ctx context.Context, userID string) (*entity.UserEmbedding, error) {
 	query := `
 	SELECT id, user_id, embedding, model_version, source, device_id, quality_score, created_at
 	FROM user_embeddings WHERE user_id = $1
 	ORDER BY created_at DESC LIMIT 1
 	`
 	row := r.db.QueryRowContext(ctx, query, userID)
-	var e domain.UserEmbedding
+	var e entity.UserEmbedding
 	var deviceID sql.NullString
 	if err := row.Scan(&e.ID, &e.UserID, &e.Embedding, &e.ModelVersion, &e.Source, &deviceID, &e.QualityScore, &e.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}
@@ -203,8 +203,8 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanUser(scanner rowScanner) (*domain.User, error) {
-	var u domain.User
+func scanUser(scanner rowScanner) (*entity.User, error) {
+	var u entity.User
 	var empID, title, fName, lName, dept sql.NullString
 	var deletedAt sql.NullTime
 
@@ -212,7 +212,7 @@ func scanUser(scanner rowScanner) (*domain.User, error) {
 		&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}

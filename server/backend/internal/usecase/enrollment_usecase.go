@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 	"github.com/google/uuid"
 )
 
@@ -31,11 +31,11 @@ func NewEnrollmentUseCase(enrollmentRepo ports.EnrollmentRepository, userRepo po
 	}
 }
 
-func (uc *EnrollmentUseCase) GetPendingJobs(ctx context.Context) ([]*domain.EnrollmentJob, error) {
+func (uc *EnrollmentUseCase) GetPendingJobs(ctx context.Context) ([]*entity.EnrollmentJob, error) {
 	return uc.enrollmentRepo.GetPendingJobs(ctx)
 }
 
-func (uc *EnrollmentUseCase) CreateJobFromImage(ctx context.Context, userID string, imageBytes []byte, filename string) (*domain.EnrollmentJob, error) {
+func (uc *EnrollmentUseCase) CreateJobFromImage(ctx context.Context, userID string, imageBytes []byte, filename string) (*entity.EnrollmentJob, error) {
 	jobID := uuid.NewString()
 	ext := filepath.Ext(filename)
 	if ext == "" {
@@ -50,7 +50,7 @@ func (uc *EnrollmentUseCase) CreateJobFromImage(ctx context.Context, userID stri
 	now := time.Now().UTC()
 	expiresAt := now.Add(24 * time.Hour)
 
-	job := &domain.EnrollmentJob{
+	job := &entity.EnrollmentJob{
 		ID:        jobID,
 		UserID:    userID,
 		ImagePath: savedPath,
@@ -67,7 +67,7 @@ func (uc *EnrollmentUseCase) CreateJobFromImage(ctx context.Context, userID stri
 }
 
 type ClaimJobResponse struct {
-	Job       *domain.EnrollmentJob `json:"job,omitempty"`
+	Job       *entity.EnrollmentJob `json:"job,omitempty"`
 	ImageB64  string                `json:"image_b64,omitempty"`
 	ImagesB64 []string              `json:"images_b64,omitempty"`
 }
@@ -95,16 +95,16 @@ func (uc *EnrollmentUseCase) ClaimPendingJob(ctx context.Context, deviceID strin
 func (uc *EnrollmentUseCase) SubmitJobResult(ctx context.Context, jobID, deviceID, embeddingB64 string, quality float64) error {
 	job, err := uc.enrollmentRepo.GetJobByID(ctx, jobID)
 	if err != nil || job == nil {
-		return domain.ErrNotFound
+		return entity.ErrNotFound
 	}
 
 	rawEmb, err := base64.StdEncoding.DecodeString(embeddingB64)
 	if err != nil || len(rawEmb) == 0 {
 		_ = uc.enrollmentRepo.UpdateJobStatus(ctx, jobID, "failed")
-		return domain.ErrInvalidInput
+		return entity.ErrInvalidInput
 	}
 
-	emb := &domain.UserEmbedding{
+	emb := &entity.UserEmbedding{
 		ID:           uuid.NewString(),
 		UserID:       job.UserID,
 		Embedding:    rawEmb,

@@ -5,53 +5,53 @@ import (
 	"testing"
 	"time"
 
-	"attendance-backend/internal/core/domain"
+	"attendance-backend/internal/entity"
 	"attendance-backend/internal/usecase"
 )
 
 type mockAttendanceRepo struct {
-	events []*domain.AttendanceEvent
-	pairs  []*domain.AttendancePair
+	events []*entity.AttendanceEvent
+	pairs  []*entity.AttendancePair
 }
 
-func (m *mockAttendanceRepo) SaveEvent(ctx context.Context, event *domain.AttendanceEvent) error {
+func (m *mockAttendanceRepo) SaveEvent(ctx context.Context, event *entity.AttendanceEvent) error {
 	m.events = append(m.events, event)
 	return nil
 }
 
-func (m *mockAttendanceRepo) GetEventByID(ctx context.Context, eventID string) (*domain.AttendanceEvent, error) {
+func (m *mockAttendanceRepo) GetEventByID(ctx context.Context, eventID string) (*entity.AttendanceEvent, error) {
 	for _, e := range m.events {
 		if e.EventID == eventID {
 			return e, nil
 		}
 	}
-	return nil, domain.ErrNotFound
+	return nil, entity.ErrNotFound
 }
 
-func (m *mockAttendanceRepo) ListEvents(ctx context.Context, limit int) ([]*domain.AttendanceEvent, error) {
+func (m *mockAttendanceRepo) ListEvents(ctx context.Context, limit int) ([]*entity.AttendanceEvent, error) {
 	return m.events, nil
 }
 
-func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*domain.AttendancePair, error) {
+func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*entity.AttendancePair, error) {
 	return m.pairs, nil
 }
 
-func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*domain.AttendancePair, error) {
+func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
 	for _, p := range m.pairs {
 		if p.UserID == userID && p.WorkDate == workDate && p.Status == "open" {
 			return p, nil
 		}
 	}
-	return nil, domain.ErrNotFound
+	return nil, entity.ErrNotFound
 }
 
-func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *domain.AttendancePair) error {
+func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *entity.AttendancePair) error {
 	pair.ID = len(m.pairs) + 1
 	m.pairs = append(m.pairs, pair)
 	return nil
 }
 
-func (m *mockAttendanceRepo) UpdatePair(ctx context.Context, pair *domain.AttendancePair) error {
+func (m *mockAttendanceRepo) UpdatePair(ctx context.Context, pair *entity.AttendancePair) error {
 	return nil
 }
 
@@ -60,7 +60,7 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 	uc := usecase.NewAttendanceUseCase(repo)
 
 	now := time.Now().UTC()
-	eventIn := &domain.AttendanceEvent{
+	eventIn := &entity.AttendanceEvent{
 		EventID:   "evt-1",
 		UserID:    "user-100",
 		Direction: "IN",
@@ -80,7 +80,7 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 	}
 
 	// Now check out
-	eventOut := &domain.AttendanceEvent{
+	eventOut := &entity.AttendanceEvent{
 		EventID:   "evt-2",
 		UserID:    "user-100",
 		Direction: "OUT",
@@ -100,7 +100,7 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 	}
 
 	// Test second session (e.g. after lunch return) on the same day
-	eventIn2 := &domain.AttendanceEvent{
+	eventIn2 := &entity.AttendanceEvent{
 		EventID:   "evt-3",
 		UserID:    "user-100",
 		Direction: "IN",

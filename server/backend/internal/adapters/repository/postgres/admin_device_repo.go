@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 )
 
 type adminRepo struct {
@@ -17,13 +17,13 @@ func NewAdminRepository(db *sql.DB) ports.AdminRepository {
 	return &adminRepo{db: db}
 }
 
-func (r *adminRepo) GetByUsername(ctx context.Context, username string) (*domain.Admin, error) {
+func (r *adminRepo) GetByUsername(ctx context.Context, username string) (*entity.Admin, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT id, username, password_hash, role, created_at, last_login FROM admins WHERE username = $1", username)
-	var a domain.Admin
+	var a entity.Admin
 	var lastLogin sql.NullTime
 	if err := row.Scan(&a.ID, &a.Username, &a.PasswordHash, &a.Role, &a.CreatedAt, &lastLogin); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}
@@ -33,13 +33,13 @@ func (r *adminRepo) GetByUsername(ctx context.Context, username string) (*domain
 	return &a, nil
 }
 
-func (r *adminRepo) GetByID(ctx context.Context, id string) (*domain.Admin, error) {
+func (r *adminRepo) GetByID(ctx context.Context, id string) (*entity.Admin, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT id, username, password_hash, role, created_at, last_login FROM admins WHERE id = $1", id)
-	var a domain.Admin
+	var a entity.Admin
 	var lastLogin sql.NullTime
 	if err := row.Scan(&a.ID, &a.Username, &a.PasswordHash, &a.Role, &a.CreatedAt, &lastLogin); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (r *adminRepo) GetByID(ctx context.Context, id string) (*domain.Admin, erro
 	return &a, nil
 }
 
-func (r *adminRepo) Create(ctx context.Context, admin *domain.Admin) error {
+func (r *adminRepo) Create(ctx context.Context, admin *entity.Admin) error {
 	_, err := r.db.ExecContext(ctx, "INSERT INTO admins (id, username, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5)",
 		admin.ID, admin.Username, admin.PasswordHash, admin.Role, admin.CreatedAt)
 	return err
@@ -70,22 +70,22 @@ func NewDeviceRepository(db *sql.DB) ports.DeviceRepository {
 	return &deviceRepo{db: db}
 }
 
-func (r *deviceRepo) GetByID(ctx context.Context, id string) (*domain.Device, error) {
+func (r *deviceRepo) GetByID(ctx context.Context, id string) (*entity.Device, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, last_seen, created_at, revoked_at FROM devices WHERE id = $1", id)
 	return scanDeviceRow(row)
 }
 
-func (r *deviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*domain.Device, error) {
+func (r *deviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*entity.Device, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, last_seen, created_at, revoked_at FROM devices WHERE api_key_hash = $1 AND status != 'revoked'", hash)
 	return scanDeviceRow(row)
 }
 
-func scanDeviceRow(row *sql.Row) (*domain.Device, error) {
-	var d domain.Device
+func scanDeviceRow(row *sql.Row) (*entity.Device, error) {
+	var d entity.Device
 	var lastSeen, revokedAt sql.NullTime
 	if err := row.Scan(&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &lastSeen, &d.CreatedAt, &revokedAt); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func scanDeviceRow(row *sql.Row) (*domain.Device, error) {
 	return &d, nil
 }
 
-func (r *deviceRepo) List(ctx context.Context) ([]*domain.Device, error) {
+func (r *deviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 	query := `
 	SELECT d.id, d.name, d.location, d.direction, d.api_key_hash, d.status, d.last_seen, d.created_at, d.revoked_at,
 	       s.applied_version, s.model_version, s.sw_version, s.cpu_temp, s.fps, s.outbox_pending, s.updated_at
@@ -112,9 +112,9 @@ func (r *deviceRepo) List(ctx context.Context) ([]*domain.Device, error) {
 	}
 	defer rows.Close()
 
-	var devices []*domain.Device
+	var devices []*entity.Device
 	for rows.Next() {
-		var d domain.Device
+		var d entity.Device
 		var lastSeen, revokedAt sql.NullTime
 		var appliedV, outboxPending sql.NullInt64
 		var modelV, swV sql.NullString
@@ -136,7 +136,7 @@ func (r *deviceRepo) List(ctx context.Context) ([]*domain.Device, error) {
 		}
 
 		if appliedV.Valid {
-			st := &domain.DeviceState{
+			st := &entity.DeviceState{
 				DeviceID:       d.ID,
 				AppliedVersion: int(appliedV.Int64),
 				ModelVersion:   modelV.String,
@@ -160,7 +160,7 @@ func (r *deviceRepo) List(ctx context.Context) ([]*domain.Device, error) {
 	return devices, nil
 }
 
-func (r *deviceRepo) Create(ctx context.Context, device *domain.Device) error {
+func (r *deviceRepo) Create(ctx context.Context, device *entity.Device) error {
 	query := `
 	INSERT INTO devices (id, name, location, direction, api_key_hash, status, created_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -179,7 +179,7 @@ func (r *deviceRepo) UpdateStatus(ctx context.Context, id string, status string,
 	return err
 }
 
-func (r *deviceRepo) UpdateState(ctx context.Context, state *domain.DeviceState) error {
+func (r *deviceRepo) UpdateState(ctx context.Context, state *entity.DeviceState) error {
 	query := `
 	INSERT INTO device_state (device_id, applied_version, model_version, sw_version, cpu_temp, fps, outbox_pending, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

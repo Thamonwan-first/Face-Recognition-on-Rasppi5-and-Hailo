@@ -3,8 +3,8 @@ package usecase
 import (
 	"context"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 )
 
 type AuditUseCase struct {
@@ -17,7 +17,7 @@ func NewAuditUseCase(auditRepo ports.AuditRepository) *AuditUseCase {
 	}
 }
 
-func (uc *AuditUseCase) List(ctx context.Context, limit int) ([]*domain.AuditLog, error) {
+func (uc *AuditUseCase) List(ctx context.Context, limit int) ([]*entity.AuditLog, error) {
 	if limit <= 0 {
 		limit = 100
 	}

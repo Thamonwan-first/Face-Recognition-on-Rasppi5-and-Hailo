@@ -8,12 +8,15 @@ Written in Go with **Clean Architecture / Ports & Adapters** and backed by **Pos
 server/backend/
 ├── main.go                     # Composition Root (Dependency Injection)
 ├── internal/
-│   ├── core/
-│   │   ├── domain/             # Core Business Entities (POJO / No ORM)
-│   │   │   └── models.go
-│   │   └── ports/              # Interfaces (Contracts between layers)
-│   │       ├── repositories.go
-│   │       └── services.go
+│   ├── entity/                 # Core Business Entities (Separated by domain)
+│   │   ├── user.go
+│   │   ├── device.go
+│   │   ├── attendance.go
+│   │   ├── enrollment.go
+│   │   ├── admin.go
+│   │   └── errors.go
+│   ├── ports/                  # Interfaces (Contracts between layers)
+│   │   └── repositories.go
 │   ├── usecase/                # Business Rules & Use Cases
 │   │   ├── auth_usecase.go
 │   │   ├── user_usecase.go

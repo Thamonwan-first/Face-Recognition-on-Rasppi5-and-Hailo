@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 	"github.com/google/uuid"
 )
 
@@ -33,15 +33,15 @@ type UserDTO struct {
 	Status     string `json:"status"`
 }
 
-func (uc *UserUseCase) List(ctx context.Context, unenrolledOnly bool) ([]*domain.User, error) {
+func (uc *UserUseCase) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
 	return uc.userRepo.List(ctx, unenrolledOnly)
 }
 
-func (uc *UserUseCase) GetByID(ctx context.Context, id string) (*domain.User, error) {
+func (uc *UserUseCase) GetByID(ctx context.Context, id string) (*entity.User, error) {
 	return uc.userRepo.GetByID(ctx, id)
 }
 
-func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO) (*domain.User, error) {
+func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO) (*entity.User, error) {
 	if dto.Name == "" {
 		parts := []string{}
 		if dto.Title != "" {
@@ -56,7 +56,7 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 		dto.Name = strings.TrimSpace(strings.Join(parts, " "))
 	}
 	if dto.Name == "" {
-		return nil, fmt.Errorf("%w: user name is required", domain.ErrInvalidInput)
+		return nil, fmt.Errorf("%w: user name is required", entity.ErrInvalidInput)
 	}
 
 	if dto.Status == "" {
@@ -65,7 +65,7 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 
 	now := time.Now().UTC()
 
-	user := &domain.User{
+	user := &entity.User{
 		ID:         uuid.NewString(),
 		EmployeeID: dto.EmployeeID,
 		Title:      dto.Title,
@@ -82,7 +82,7 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 		return nil, err
 	}
 
-	_ = uc.auditRepo.Log(ctx, &domain.AuditLog{
+	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &adminID,
 		Action:     "user.create",
 		TargetType: "user",
@@ -94,7 +94,7 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 	return user, nil
 }
 
-func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *UserDTO) (*domain.User, error) {
+func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *UserDTO) (*entity.User, error) {
 	user, err := uc.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 		return nil, err
 	}
 
-	_ = uc.auditRepo.Log(ctx, &domain.AuditLog{
+	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &adminID,
 		Action:     "user.update",
 		TargetType: "user",
@@ -158,7 +158,7 @@ func (uc *UserUseCase) Delete(ctx context.Context, adminID, id string) error {
 		return err
 	}
 
-	_ = uc.auditRepo.Log(ctx, &domain.AuditLog{
+	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &adminID,
 		Action:     "user.delete",
 		TargetType: "user",
@@ -169,7 +169,7 @@ func (uc *UserUseCase) Delete(ctx context.Context, adminID, id string) error {
 }
 
 func (uc *UserUseCase) SaveEmbedding(ctx context.Context, adminID, userID string, embedding []byte, quality float64) error {
-	emb := &domain.UserEmbedding{
+	emb := &entity.UserEmbedding{
 		ID:           uuid.NewString(),
 		UserID:       userID,
 		Embedding:    embedding,

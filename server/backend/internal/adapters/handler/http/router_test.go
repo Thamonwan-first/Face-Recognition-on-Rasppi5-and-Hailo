@@ -10,7 +10,7 @@ import (
 	"time"
 
 	handlerHttp "attendance-backend/internal/adapters/handler/http"
-	"attendance-backend/internal/core/domain"
+	"attendance-backend/internal/entity"
 	"attendance-backend/internal/pkg/hasher"
 	"attendance-backend/internal/pkg/token"
 	"attendance-backend/internal/usecase"
@@ -18,24 +18,24 @@ import (
 
 // In-Memory Mock Repositories for fast, zero-dependency HTTP testing
 type mockAdminRepo struct {
-	admin *domain.Admin
+	admin *entity.Admin
 }
 
-func (m *mockAdminRepo) GetByUsername(ctx context.Context, username string) (*domain.Admin, error) {
+func (m *mockAdminRepo) GetByUsername(ctx context.Context, username string) (*entity.Admin, error) {
 	if m.admin != nil && m.admin.Username == username {
 		return m.admin, nil
 	}
-	return nil, domain.ErrNotFound
+	return nil, entity.ErrNotFound
 }
 
-func (m *mockAdminRepo) GetByID(ctx context.Context, id string) (*domain.Admin, error) {
+func (m *mockAdminRepo) GetByID(ctx context.Context, id string) (*entity.Admin, error) {
 	if m.admin != nil && m.admin.ID == id {
 		return m.admin, nil
 	}
-	return nil, domain.ErrNotFound
+	return nil, entity.ErrNotFound
 }
 
-func (m *mockAdminRepo) Create(ctx context.Context, admin *domain.Admin) error {
+func (m *mockAdminRepo) Create(ctx context.Context, admin *entity.Admin) error {
 	m.admin = admin
 	return nil
 }
@@ -45,31 +45,31 @@ func (m *mockAdminRepo) UpdateLastLogin(ctx context.Context, id string, lastLogi
 }
 
 type mockDeviceRepo struct {
-	device *domain.Device
+	device *entity.Device
 }
 
-func (m *mockDeviceRepo) GetByID(ctx context.Context, id string) (*domain.Device, error) {
+func (m *mockDeviceRepo) GetByID(ctx context.Context, id string) (*entity.Device, error) {
 	if m.device != nil && m.device.ID == id {
 		return m.device, nil
 	}
-	return nil, domain.ErrNotFound
+	return nil, entity.ErrNotFound
 }
 
-func (m *mockDeviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*domain.Device, error) {
+func (m *mockDeviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*entity.Device, error) {
 	if m.device != nil && m.device.ApiKeyHash == hash {
 		return m.device, nil
 	}
-	return nil, domain.ErrNotFound
+	return nil, entity.ErrNotFound
 }
 
-func (m *mockDeviceRepo) List(ctx context.Context) ([]*domain.Device, error) {
+func (m *mockDeviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 	if m.device != nil {
-		return []*domain.Device{m.device}, nil
+		return []*entity.Device{m.device}, nil
 	}
-	return []*domain.Device{}, nil
+	return []*entity.Device{}, nil
 }
 
-func (m *mockDeviceRepo) Create(ctx context.Context, device *domain.Device) error {
+func (m *mockDeviceRepo) Create(ctx context.Context, device *entity.Device) error {
 	m.device = device
 	return nil
 }
@@ -78,7 +78,7 @@ func (m *mockDeviceRepo) UpdateStatus(ctx context.Context, id string, status str
 	return nil
 }
 
-func (m *mockDeviceRepo) UpdateState(ctx context.Context, state *domain.DeviceState) error {
+func (m *mockDeviceRepo) UpdateState(ctx context.Context, state *entity.DeviceState) error {
 	return nil
 }
 
@@ -88,75 +88,75 @@ func (m *mockDeviceRepo) Delete(ctx context.Context, id string) error {
 }
 
 type mockUserRepo struct {
-	users []*domain.User
+	users []*entity.User
 }
 
-func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*domain.User, error) {
-	return nil, domain.ErrNotFound
+func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*entity.User, error) {
+	return nil, entity.ErrNotFound
 }
-func (m *mockUserRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*domain.User, error) {
-	return nil, domain.ErrNotFound
+func (m *mockUserRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*entity.User, error) {
+	return nil, entity.ErrNotFound
 }
-func (m *mockUserRepo) List(ctx context.Context, unenrolledOnly bool) ([]*domain.User, error) {
+func (m *mockUserRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
 	return m.users, nil
 }
-func (m *mockUserRepo) Create(ctx context.Context, user *domain.User) error {
+func (m *mockUserRepo) Create(ctx context.Context, user *entity.User) error {
 	m.users = append(m.users, user)
 	return nil
 }
-func (m *mockUserRepo) Update(ctx context.Context, user *domain.User) error { return nil }
+func (m *mockUserRepo) Update(ctx context.Context, user *entity.User) error { return nil }
 func (m *mockUserRepo) Delete(ctx context.Context, id string) error          { return nil }
 func (m *mockUserRepo) GetLatestVersion(ctx context.Context) (int, error)    { return 1, nil }
-func (m *mockUserRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*domain.User, error) {
+func (m *mockUserRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*entity.User, error) {
 	return m.users, nil
 }
-func (m *mockUserRepo) SaveEmbedding(ctx context.Context, embedding *domain.UserEmbedding) error {
+func (m *mockUserRepo) SaveEmbedding(ctx context.Context, embedding *entity.UserEmbedding) error {
 	return nil
 }
-func (m *mockUserRepo) GetEmbedding(ctx context.Context, userID string) (*domain.UserEmbedding, error) {
-	return nil, domain.ErrNotFound
+func (m *mockUserRepo) GetEmbedding(ctx context.Context, userID string) (*entity.UserEmbedding, error) {
+	return nil, entity.ErrNotFound
 }
 func (m *mockUserRepo) DeleteEmbedding(ctx context.Context, userID string) error { return nil }
 
 type mockAttendanceRepo struct {
-	pairs []*domain.AttendancePair
+	pairs []*entity.AttendancePair
 }
 
-func (m *mockAttendanceRepo) SaveEvent(ctx context.Context, event *domain.AttendanceEvent) error {
+func (m *mockAttendanceRepo) SaveEvent(ctx context.Context, event *entity.AttendanceEvent) error {
 	return nil
 }
-func (m *mockAttendanceRepo) GetEventByID(ctx context.Context, eventID string) (*domain.AttendanceEvent, error) {
-	return nil, domain.ErrNotFound
+func (m *mockAttendanceRepo) GetEventByID(ctx context.Context, eventID string) (*entity.AttendanceEvent, error) {
+	return nil, entity.ErrNotFound
 }
-func (m *mockAttendanceRepo) ListEvents(ctx context.Context, limit int) ([]*domain.AttendanceEvent, error) {
+func (m *mockAttendanceRepo) ListEvents(ctx context.Context, limit int) ([]*entity.AttendanceEvent, error) {
 	return nil, nil
 }
-func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*domain.AttendancePair, error) {
+func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*entity.AttendancePair, error) {
 	return m.pairs, nil
 }
-func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*domain.AttendancePair, error) {
-	return nil, domain.ErrNotFound
+func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
+	return nil, entity.ErrNotFound
 }
-func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *domain.AttendancePair) error {
+func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *entity.AttendancePair) error {
 	return nil
 }
-func (m *mockAttendanceRepo) UpdatePair(ctx context.Context, pair *domain.AttendancePair) error {
+func (m *mockAttendanceRepo) UpdatePair(ctx context.Context, pair *entity.AttendancePair) error {
 	return nil
 }
 
 type mockEnrollmentRepo struct{}
 
-func (m *mockEnrollmentRepo) CreateJob(ctx context.Context, job *domain.EnrollmentJob) error {
+func (m *mockEnrollmentRepo) CreateJob(ctx context.Context, job *entity.EnrollmentJob) error {
 	return nil
 }
-func (m *mockEnrollmentRepo) ClaimPendingJob(ctx context.Context, deviceID string) (*domain.EnrollmentJob, error) {
+func (m *mockEnrollmentRepo) ClaimPendingJob(ctx context.Context, deviceID string) (*entity.EnrollmentJob, error) {
 	return nil, nil
 }
-func (m *mockEnrollmentRepo) GetPendingJobs(ctx context.Context) ([]*domain.EnrollmentJob, error) {
+func (m *mockEnrollmentRepo) GetPendingJobs(ctx context.Context) ([]*entity.EnrollmentJob, error) {
 	return nil, nil
 }
-func (m *mockEnrollmentRepo) GetJobByID(ctx context.Context, id string) (*domain.EnrollmentJob, error) {
-	return nil, domain.ErrNotFound
+func (m *mockEnrollmentRepo) GetJobByID(ctx context.Context, id string) (*entity.EnrollmentJob, error) {
+	return nil, entity.ErrNotFound
 }
 func (m *mockEnrollmentRepo) UpdateJobStatus(ctx context.Context, id, status string) error {
 	return nil
@@ -164,15 +164,15 @@ func (m *mockEnrollmentRepo) UpdateJobStatus(ctx context.Context, id, status str
 
 type mockAuditRepo struct{}
 
-func (m *mockAuditRepo) Log(ctx context.Context, log *domain.AuditLog) error { return nil }
-func (m *mockAuditRepo) List(ctx context.Context, limit int) ([]*domain.AuditLog, error) {
+func (m *mockAuditRepo) Log(ctx context.Context, log *entity.AuditLog) error { return nil }
+func (m *mockAuditRepo) List(ctx context.Context, limit int) ([]*entity.AuditLog, error) {
 	return nil, nil
 }
 
 func setupTestServer() *httptest.Server {
 	adminHash, _ := hasher.HashPassword("admin1234")
 	adminRepo := &mockAdminRepo{
-		admin: &domain.Admin{
+		admin: &entity.Admin{
 			ID:           "test-admin-id",
 			Username:     "admin",
 			PasswordHash: adminHash,
@@ -183,7 +183,7 @@ func setupTestServer() *httptest.Server {
 	deviceKey := "changeme-generate-with-openssl-rand-hex-32"
 	deviceHash := hasher.HashAPIKey(deviceKey)
 	deviceRepo := &mockDeviceRepo{
-		device: &domain.Device{
+		device: &entity.Device{
 			ID:         "kiosk-01",
 			Name:       "kiosk-01",
 			ApiKeyHash: deviceHash,

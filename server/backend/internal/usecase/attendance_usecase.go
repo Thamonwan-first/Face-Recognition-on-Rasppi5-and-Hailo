@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 )
 
 type AttendanceUseCase struct {
@@ -18,14 +18,14 @@ func NewAttendanceUseCase(attendanceRepo ports.AttendanceRepository) *Attendance
 	}
 }
 
-func (uc *AttendanceUseCase) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*domain.AttendancePair, error) {
+func (uc *AttendanceUseCase) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*entity.AttendancePair, error) {
 	if limit <= 0 {
 		limit = 300
 	}
 	return uc.attendanceRepo.ListPairs(ctx, startDate, endDate, userID, department, limit)
 }
 
-func (uc *AttendanceUseCase) ListEvents(ctx context.Context, limit int) ([]*domain.AttendanceEvent, error) {
+func (uc *AttendanceUseCase) ListEvents(ctx context.Context, limit int) ([]*entity.AttendanceEvent, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -33,7 +33,7 @@ func (uc *AttendanceUseCase) ListEvents(ctx context.Context, limit int) ([]*doma
 }
 
 // ProcessEvent processes an incoming attendance event and updates/creates attendance pairs
-func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *domain.AttendanceEvent) error {
+func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.AttendanceEvent) error {
 	// 1. Check idempotency
 	existing, err := uc.attendanceRepo.GetEventByID(ctx, event.EventID)
 	if err == nil && existing != nil {
@@ -56,7 +56,7 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *domain.Att
 	pair, err := uc.attendanceRepo.FindOpenPair(ctx, event.UserID, workDate)
 	if err != nil || pair == nil {
 		// Create new pair
-		newPair := &domain.AttendancePair{
+		newPair := &entity.AttendancePair{
 			UserID:    event.UserID,
 			WorkDate:  workDate,
 			CreatedAt: time.Now().UTC(),

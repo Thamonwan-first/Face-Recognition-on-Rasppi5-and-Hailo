@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 	"attendance-backend/internal/pkg/hasher"
 	"attendance-backend/internal/pkg/token"
 )
@@ -28,18 +28,18 @@ type LoginResponse struct {
 	AccessToken string        `json:"access_token"`
 	Token       string        `json:"token"`
 	TokenType   string        `json:"token_type"`
-	User        *domain.Admin `json:"user"`
-	Admin       *domain.Admin `json:"admin"`
+	User        *entity.Admin `json:"user"`
+	Admin       *entity.Admin `json:"admin"`
 }
 
 func (uc *AuthUseCase) Login(ctx context.Context, username, password string) (*LoginResponse, error) {
 	admin, err := uc.adminRepo.GetByUsername(ctx, username)
 	if err != nil {
-		return nil, domain.ErrUnauthorized
+		return nil, entity.ErrUnauthorized
 	}
 
 	if !hasher.CheckPassword(password, admin.PasswordHash) {
-		return nil, domain.ErrUnauthorized
+		return nil, entity.ErrUnauthorized
 	}
 
 	now := time.Now().UTC()
@@ -48,10 +48,10 @@ func (uc *AuthUseCase) Login(ctx context.Context, username, password string) (*L
 
 	accessToken, err := uc.tokenMaker.CreateToken(admin.ID, admin.Username, admin.Role, 24*time.Hour)
 	if err != nil {
-		return nil, domain.ErrInternalServer
+		return nil, entity.ErrInternalServer
 	}
 
-	_ = uc.auditRepo.Log(ctx, &domain.AuditLog{
+	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &admin.ID,
 		Action:     "admin.login",
 		TargetType: "admin",
@@ -68,6 +68,6 @@ func (uc *AuthUseCase) Login(ctx context.Context, username, password string) (*L
 	}, nil
 }
 
-func (uc *AuthUseCase) GetCurrentAdmin(ctx context.Context, adminID string) (*domain.Admin, error) {
+func (uc *AuthUseCase) GetCurrentAdmin(ctx context.Context, adminID string) (*entity.Admin, error) {
 	return uc.adminRepo.GetByID(ctx, adminID)
 }

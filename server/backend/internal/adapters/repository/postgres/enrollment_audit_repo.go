@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 )
 
 type enrollmentRepo struct {
@@ -16,7 +16,7 @@ func NewEnrollmentRepository(db *sql.DB) ports.EnrollmentRepository {
 	return &enrollmentRepo{db: db}
 }
 
-func (r *enrollmentRepo) CreateJob(ctx context.Context, job *domain.EnrollmentJob) error {
+func (r *enrollmentRepo) CreateJob(ctx context.Context, job *entity.EnrollmentJob) error {
 	query := `
 	INSERT INTO enrollment_jobs (id, user_id, image_path, status, assigned_device_id, created_at, expires_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -26,7 +26,7 @@ func (r *enrollmentRepo) CreateJob(ctx context.Context, job *domain.EnrollmentJo
 	return err
 }
 
-func (r *enrollmentRepo) ClaimPendingJob(ctx context.Context, deviceID string) (*domain.EnrollmentJob, error) {
+func (r *enrollmentRepo) ClaimPendingJob(ctx context.Context, deviceID string) (*entity.EnrollmentJob, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (r *enrollmentRepo) ClaimPendingJob(ctx context.Context, deviceID string) (
 	FOR UPDATE SKIP LOCKED
 	`
 	row := tx.QueryRowContext(ctx, query)
-	var j domain.EnrollmentJob
+	var j entity.EnrollmentJob
 	var imgPath, assignedDev sql.NullString
 	var expiresAt sql.NullTime
 
@@ -72,7 +72,7 @@ func (r *enrollmentRepo) ClaimPendingJob(ctx context.Context, deviceID string) (
 	return &j, nil
 }
 
-func (r *enrollmentRepo) GetPendingJobs(ctx context.Context) ([]*domain.EnrollmentJob, error) {
+func (r *enrollmentRepo) GetPendingJobs(ctx context.Context) ([]*entity.EnrollmentJob, error) {
 	query := `
 	SELECT id, user_id, image_path, status, assigned_device_id, created_at, processed_at, expires_at
 	FROM enrollment_jobs
@@ -85,9 +85,9 @@ func (r *enrollmentRepo) GetPendingJobs(ctx context.Context) ([]*domain.Enrollme
 	}
 	defer rows.Close()
 
-	var jobs []*domain.EnrollmentJob
+	var jobs []*entity.EnrollmentJob
 	for rows.Next() {
-		var j domain.EnrollmentJob
+		var j entity.EnrollmentJob
 		var imgPath, assignedDev sql.NullString
 		var processedAt, expiresAt sql.NullTime
 
@@ -107,19 +107,19 @@ func (r *enrollmentRepo) GetPendingJobs(ctx context.Context) ([]*domain.Enrollme
 	return jobs, nil
 }
 
-func (r *enrollmentRepo) GetJobByID(ctx context.Context, id string) (*domain.EnrollmentJob, error) {
+func (r *enrollmentRepo) GetJobByID(ctx context.Context, id string) (*entity.EnrollmentJob, error) {
 	query := `
 	SELECT id, user_id, image_path, status, assigned_device_id, created_at, processed_at, expires_at
 	FROM enrollment_jobs WHERE id = $1
 	`
 	row := r.db.QueryRowContext(ctx, query, id)
-	var j domain.EnrollmentJob
+	var j entity.EnrollmentJob
 	var imgPath, assignedDev sql.NullString
 	var processedAt, expiresAt sql.NullTime
 
 	if err := row.Scan(&j.ID, &j.UserID, &imgPath, &j.Status, &assignedDev, &j.CreatedAt, &processedAt, &expiresAt); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}
@@ -150,14 +150,14 @@ func NewAuditRepository(db *sql.DB) ports.AuditRepository {
 	return &auditRepo{db: db}
 }
 
-func (r *auditRepo) Log(ctx context.Context, log *domain.AuditLog) error {
+func (r *auditRepo) Log(ctx context.Context, log *entity.AuditLog) error {
 	query := "INSERT INTO audit_log (admin_id, action, target_type, target_id, detail, created_at) VALUES ($1, $2, $3, $4, $5, $6)"
 	_, err := r.db.ExecContext(ctx, query,
 		log.AdminID, log.Action, log.TargetType, log.TargetID, log.Detail, log.CreatedAt)
 	return err
 }
 
-func (r *auditRepo) List(ctx context.Context, limit int) ([]*domain.AuditLog, error) {
+func (r *auditRepo) List(ctx context.Context, limit int) ([]*entity.AuditLog, error) {
 	query := "SELECT id, admin_id, action, target_type, target_id, detail, created_at FROM audit_log ORDER BY created_at DESC LIMIT $1"
 	rows, err := r.db.QueryContext(ctx, query, limit)
 	if err != nil {
@@ -165,9 +165,9 @@ func (r *auditRepo) List(ctx context.Context, limit int) ([]*domain.AuditLog, er
 	}
 	defer rows.Close()
 
-	var logs []*domain.AuditLog
+	var logs []*entity.AuditLog
 	for rows.Next() {
-		var l domain.AuditLog
+		var l entity.AuditLog
 		var adminID, targetType, targetID, detail sql.NullString
 		if err := rows.Scan(&l.ID, &adminID, &l.Action, &targetType, &targetID, &detail, &l.CreatedAt); err != nil {
 			return nil, err

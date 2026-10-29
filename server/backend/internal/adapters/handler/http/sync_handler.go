@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"attendance-backend/internal/core/domain"
+	"attendance-backend/internal/entity"
 	"attendance-backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 )
@@ -18,11 +18,11 @@ func NewSyncHandler(syncUC *usecase.SyncUseCase) *SyncHandler {
 }
 
 type syncEventsRequest struct {
-	Events []*domain.AttendanceEvent `json:"events" binding:"required"`
+	Events []*entity.AttendanceEvent `json:"events" binding:"required"`
 }
 
 func (h *SyncHandler) SyncEvents(c *gin.Context) {
-	device := c.MustGet(ContextDeviceKey).(*domain.Device)
+	device := c.MustGet(ContextDeviceKey).(*entity.Device)
 
 	var req syncEventsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -44,7 +44,7 @@ func (h *SyncHandler) SyncEvents(c *gin.Context) {
 }
 
 func (h *SyncHandler) Heartbeat(c *gin.Context) {
-	device := c.MustGet(ContextDeviceKey).(*domain.Device)
+	device := c.MustGet(ContextDeviceKey).(*entity.Device)
 
 	var dto usecase.HeartbeatDTO
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -74,7 +74,7 @@ func (h *SyncHandler) SyncUsers(c *gin.Context) {
 }
 
 func (h *SyncHandler) KioskEnrollment(c *gin.Context) {
-	device := c.MustGet(ContextDeviceKey).(*domain.Device)
+	device := c.MustGet(ContextDeviceKey).(*entity.Device)
 
 	var dto usecase.KioskEnrollmentDTO
 	if err := c.ShouldBindJSON(&dto); err != nil {

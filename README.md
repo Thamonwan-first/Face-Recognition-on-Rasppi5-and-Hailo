@@ -109,9 +109,8 @@
     ├── backend/                # ซอร์สโค้ด API เซิร์ฟเวอร์กลาง (Go Clean Architecture)
     │   ├── main.go             # Composition Root (Dependency Injection) & Bootstrapping
     │   ├── internal/
-    │   │   ├── core/
-    │   │   │   ├── domain/     # Core Business Models (Pure Entities)
-    │   │   │   └── ports/      # Interface Contracts (Repositories & Services)
+    │   │   ├── entity/         # Core Business Entities (user, device, attendance, admin, errors)
+    │   │   ├── ports/          # Interface Contracts (Repositories & Services)
     │   │   ├── usecase/        # Business Logic (Auth, User, Attendance, Sync, Device)
     │   │   ├── adapters/
     │   │   │   ├── repository/ # PostgreSQL Implementation (pgx/v5)

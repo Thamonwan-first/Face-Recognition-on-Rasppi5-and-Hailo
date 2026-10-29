@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 )
 
 type attendanceRepo struct {
@@ -17,7 +17,7 @@ func NewAttendanceRepository(db *sql.DB) ports.AttendanceRepository {
 	return &attendanceRepo{db: db}
 }
 
-func (r *attendanceRepo) SaveEvent(ctx context.Context, ev *domain.AttendanceEvent) error {
+func (r *attendanceRepo) SaveEvent(ctx context.Context, ev *entity.AttendanceEvent) error {
 	query := `
 	INSERT INTO attendance_events (event_id, user_id, device_id, direction, confidence, clock_synced, created_at, synced_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -27,23 +27,23 @@ func (r *attendanceRepo) SaveEvent(ctx context.Context, ev *domain.AttendanceEve
 	return err
 }
 
-func (r *attendanceRepo) GetEventByID(ctx context.Context, eventID string) (*domain.AttendanceEvent, error) {
+func (r *attendanceRepo) GetEventByID(ctx context.Context, eventID string) (*entity.AttendanceEvent, error) {
 	query := `
 	SELECT event_id, user_id, device_id, direction, confidence, clock_synced, created_at, synced_at
 	FROM attendance_events WHERE event_id = $1
 	`
 	row := r.db.QueryRowContext(ctx, query, eventID)
-	var ev domain.AttendanceEvent
+	var ev entity.AttendanceEvent
 	if err := row.Scan(&ev.EventID, &ev.UserID, &ev.DeviceID, &ev.Direction, &ev.Confidence, &ev.ClockSynced, &ev.CreatedAt, &ev.SyncedAt); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}
 	return &ev, nil
 }
 
-func (r *attendanceRepo) ListEvents(ctx context.Context, limit int) ([]*domain.AttendanceEvent, error) {
+func (r *attendanceRepo) ListEvents(ctx context.Context, limit int) ([]*entity.AttendanceEvent, error) {
 	query := `
 	SELECT event_id, user_id, device_id, direction, confidence, clock_synced, created_at, synced_at
 	FROM attendance_events
@@ -55,9 +55,9 @@ func (r *attendanceRepo) ListEvents(ctx context.Context, limit int) ([]*domain.A
 	}
 	defer rows.Close()
 
-	var events []*domain.AttendanceEvent
+	var events []*entity.AttendanceEvent
 	for rows.Next() {
-		var ev domain.AttendanceEvent
+		var ev entity.AttendanceEvent
 		if err := rows.Scan(&ev.EventID, &ev.UserID, &ev.DeviceID, &ev.Direction, &ev.Confidence, &ev.ClockSynced, &ev.CreatedAt, &ev.SyncedAt); err != nil {
 			return nil, err
 		}
@@ -66,7 +66,7 @@ func (r *attendanceRepo) ListEvents(ctx context.Context, limit int) ([]*domain.A
 	return events, nil
 }
 
-func (r *attendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*domain.AttendancePair, error) {
+func (r *attendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*entity.AttendancePair, error) {
 	query := `
 	SELECT p.id, p.user_id, u.name, u.employee_id, u.department,
 	       p.check_in_event_id, p.check_out_event_id,
@@ -112,9 +112,9 @@ func (r *attendanceRepo) ListPairs(ctx context.Context, startDate, endDate, user
 	}
 	defer rows.Close()
 
-	var pairs []*domain.AttendancePair
+	var pairs []*entity.AttendancePair
 	for rows.Next() {
-		var p domain.AttendancePair
+		var p entity.AttendancePair
 		var uName, empID, dept sql.NullString
 		var inID, outID sql.NullString
 		var inTime, outTime sql.NullTime
@@ -194,7 +194,7 @@ func itoa(n int) string {
 	return string(res)
 }
 
-func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*domain.AttendancePair, error) {
+func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
 	query := `
 	SELECT id, user_id, check_in_event_id, check_out_event_id, work_date, hours_worked, status, created_at, updated_at
 	FROM attendance_pairs
@@ -202,13 +202,13 @@ func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate stri
 	ORDER BY created_at DESC LIMIT 1
 	`
 	row := r.db.QueryRowContext(ctx, query, userID, workDate)
-	var p domain.AttendancePair
+	var p entity.AttendancePair
 	var inID, outID sql.NullString
 	var hours sql.NullFloat64
 
 	if err := row.Scan(&p.ID, &p.UserID, &inID, &outID, &p.WorkDate, &hours, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotFound
+			return nil, entity.ErrNotFound
 		}
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate stri
 	return &p, nil
 }
 
-func (r *attendanceRepo) SavePair(ctx context.Context, p *domain.AttendancePair) error {
+func (r *attendanceRepo) SavePair(ctx context.Context, p *entity.AttendancePair) error {
 	query := `
 	INSERT INTO attendance_pairs (user_id, check_in_event_id, check_out_event_id, work_date, hours_worked, status, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -245,7 +245,7 @@ func (r *attendanceRepo) SavePair(ctx context.Context, p *domain.AttendancePair)
 	return err
 }
 
-func (r *attendanceRepo) UpdatePair(ctx context.Context, p *domain.AttendancePair) error {
+func (r *attendanceRepo) UpdatePair(ctx context.Context, p *entity.AttendancePair) error {
 	query := `
 	UPDATE attendance_pairs SET
 		check_in_event_id = $1, check_out_event_id = $2, hours_worked = $3, status = $4, updated_at = $5

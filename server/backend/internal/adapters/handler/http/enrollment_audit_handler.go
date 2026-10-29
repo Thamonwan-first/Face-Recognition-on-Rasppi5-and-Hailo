@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"attendance-backend/internal/core/domain"
+	"attendance-backend/internal/entity"
 	"attendance-backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 )
@@ -57,7 +57,7 @@ func (h *EnrollmentHandler) Create(c *gin.Context) {
 }
 
 func (h *EnrollmentHandler) Claim(c *gin.Context) {
-	device := c.MustGet(ContextDeviceKey).(*domain.Device)
+	device := c.MustGet(ContextDeviceKey).(*entity.Device)
 
 	resp, err := h.enrollmentUC.ClaimPendingJob(c.Request.Context(), device.ID)
 	if err != nil {
@@ -75,7 +75,7 @@ type enrollmentResultRequest struct {
 }
 
 func (h *EnrollmentHandler) Result(c *gin.Context) {
-	device := c.MustGet(ContextDeviceKey).(*domain.Device)
+	device := c.MustGet(ContextDeviceKey).(*entity.Device)
 
 	var req enrollmentResultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

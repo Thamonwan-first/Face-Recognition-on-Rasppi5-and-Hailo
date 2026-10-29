@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 	"github.com/google/uuid"
 )
 
@@ -45,7 +45,7 @@ func (uc *SyncUseCase) Heartbeat(ctx context.Context, deviceID string, dto *Hear
 	now := time.Now().UTC()
 	_ = uc.deviceRepo.UpdateStatus(ctx, deviceID, "online", now)
 
-	state := &domain.DeviceState{
+	state := &entity.DeviceState{
 		DeviceID:       deviceID,
 		AppliedVersion: dto.AppliedVersion,
 		SwVersion:      dto.SwVersion,
@@ -144,7 +144,7 @@ func (uc *SyncUseCase) SaveKioskEnrollment(ctx context.Context, deviceID string,
 
 	user, err := uc.userRepo.GetByID(ctx, dto.UserID)
 	if err != nil || user == nil {
-		user = &domain.User{
+		user = &entity.User{
 			ID:         dto.UserID,
 			EmployeeID: dto.EmployeeID,
 			Title:      dto.Title,
@@ -171,7 +171,7 @@ func (uc *SyncUseCase) SaveKioskEnrollment(ctx context.Context, deviceID string,
 	if dto.EmbeddingB64 != "" {
 		rawEmb, err := base64.StdEncoding.DecodeString(dto.EmbeddingB64)
 		if err == nil && len(rawEmb) > 0 {
-			emb := &domain.UserEmbedding{
+			emb := &entity.UserEmbedding{
 				ID:           uuid.NewString(),
 				UserID:       user.ID,
 				Embedding:    rawEmb,
@@ -188,7 +188,7 @@ func (uc *SyncUseCase) SaveKioskEnrollment(ctx context.Context, deviceID string,
 	return nil
 }
 
-func (uc *SyncUseCase) ProcessAttendanceEvents(ctx context.Context, deviceID string, events []*domain.AttendanceEvent) (int, error) {
+func (uc *SyncUseCase) ProcessAttendanceEvents(ctx context.Context, deviceID string, events []*entity.AttendanceEvent) (int, error) {
 	count := 0
 	for _, ev := range events {
 		ev.DeviceID = deviceID

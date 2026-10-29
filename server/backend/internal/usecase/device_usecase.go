@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"attendance-backend/internal/core/domain"
-	"attendance-backend/internal/core/ports"
+	"attendance-backend/internal/entity"
+	"attendance-backend/internal/ports"
 	"attendance-backend/internal/pkg/hasher"
 )
 
@@ -34,11 +34,11 @@ type DeviceDTO struct {
 }
 
 type RegisterDeviceResponse struct {
-	Device *domain.Device `json:"device"`
+	Device *entity.Device `json:"device"`
 	APIKey string         `json:"api_key"`
 }
 
-func (uc *DeviceUseCase) List(ctx context.Context) ([]*domain.Device, error) {
+func (uc *DeviceUseCase) List(ctx context.Context) ([]*entity.Device, error) {
 	devices, err := uc.deviceRepo.List(ctx)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (uc *DeviceUseCase) List(ctx context.Context) ([]*domain.Device, error) {
 
 func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *DeviceDTO) (*RegisterDeviceResponse, error) {
 	if dto.ID == "" {
-		return nil, fmt.Errorf("%w: device id is required", domain.ErrInvalidInput)
+		return nil, fmt.Errorf("%w: device id is required", entity.ErrInvalidInput)
 	}
 	if dto.Name == "" {
 		dto.Name = dto.ID
@@ -89,7 +89,7 @@ func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *Devi
 	hash := hasher.HashAPIKey(apiKey)
 
 	now := time.Now().UTC()
-	device := &domain.Device{
+	device := &entity.Device{
 		ID:         dto.ID,
 		Name:       dto.Name,
 		Location:   dto.Location,
@@ -103,7 +103,7 @@ func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *Devi
 		return nil, err
 	}
 
-	_ = uc.auditRepo.Log(ctx, &domain.AuditLog{
+	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &adminID,
 		Action:     "device.register",
 		TargetType: "device",
@@ -117,9 +117,9 @@ func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *Devi
 	}, nil
 }
 
-func (uc *DeviceUseCase) AuthenticateDevice(ctx context.Context, apiKey string) (*domain.Device, error) {
+func (uc *DeviceUseCase) AuthenticateDevice(ctx context.Context, apiKey string) (*entity.Device, error) {
 	if apiKey == "" {
-		return nil, domain.ErrUnauthorized
+		return nil, entity.ErrUnauthorized
 	}
 
 	hash := hasher.HashAPIKey(apiKey)
@@ -131,7 +131,7 @@ func (uc *DeviceUseCase) AuthenticateDevice(ctx context.Context, apiKey string) 
 	// Backward compatibility fallback for legacy bcrypt keys
 	devices, err := uc.deviceRepo.List(ctx)
 	if err != nil {
-		return nil, domain.ErrUnauthorized
+		return nil, entity.ErrUnauthorized
 	}
 
 	for _, dev := range devices {
@@ -139,7 +139,7 @@ func (uc *DeviceUseCase) AuthenticateDevice(ctx context.Context, apiKey string) 
 			return dev, nil
 		}
 	}
-	return nil, domain.ErrUnauthorized
+	return nil, entity.ErrUnauthorized
 }
 
 func (uc *DeviceUseCase) Delete(ctx context.Context, adminID, id string) error {
@@ -148,7 +148,7 @@ func (uc *DeviceUseCase) Delete(ctx context.Context, adminID, id string) error {
 		return err
 	}
 
-	_ = uc.auditRepo.Log(ctx, &domain.AuditLog{
+	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &adminID,
 		Action:     "device.delete",
 		TargetType: "device",
