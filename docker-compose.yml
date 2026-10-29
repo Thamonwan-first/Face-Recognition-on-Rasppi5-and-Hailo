@@ -1,8 +1,7 @@
 # ─────────────────────────────────────────────────────────
-# Docker Compose — Central Attendance Server
+# Docker Compose — Central Attendance Server (PostgreSQL)
 # ─────────────────────────────────────────────────────────
-# Development:  docker compose up              (SQLite)
-# Production:   docker compose --profile prod up (PostgreSQL)
+# Start all:  docker compose up -d
 # ─────────────────────────────────────────────────────────
 
 services:
@@ -13,27 +12,31 @@ services:
     restart: unless-stopped
     ports:
       - "8443:8443"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=attendance_app
+      - DB_PASSWORD=changeme
+      - DB_NAME=attendance
     env_file:
       - ./server/backend/.env
     volumes:
-      - server-data:/app/data         # SQLite DB + enrollment images
+      - server-data:/app/data         # Enrollment images & temporary uploads
       - ./server/certs:/app/certs:ro   # TLS certificates
     depends_on:
       postgres:
         condition: service_healthy
-        required: false                # optional — only when profile=prod
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8443/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8443/health"]
       interval: 30s
       timeout: 5s
       retries: 3
 
-  # ── PostgreSQL (production profile) ───────────────────
+  # ── PostgreSQL Database ───────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: attendance-db
     restart: unless-stopped
-    profiles: ["prod"]
     environment:
       POSTGRES_DB: ${DB_NAME:-attendance}
       POSTGRES_USER: ${DB_USER:-attendance_app}
