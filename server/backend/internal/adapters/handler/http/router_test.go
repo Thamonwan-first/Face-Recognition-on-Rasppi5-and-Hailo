@@ -2,33 +2,199 @@ package http_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
+	"time"
 
 	handlerHttp "attendance-backend/internal/adapters/handler/http"
-	"attendance-backend/internal/adapters/repository/sqlite"
+	"attendance-backend/internal/core/domain"
+	"attendance-backend/internal/pkg/hasher"
 	"attendance-backend/internal/pkg/token"
 	"attendance-backend/internal/usecase"
 )
 
-func setupTestServer(t *testing.T) (*httptest.Server, *sqlite.NewTestDBHelper) {
-	tempDB := "test_server.db"
-	_ = os.Remove(tempDB)
+// In-Memory Mock Repositories for fast, zero-dependency HTTP testing
+type mockAdminRepo struct {
+	admin *domain.Admin
+}
 
-	db, err := sqlite.NewSQLiteDB(tempDB)
-	if err != nil {
-		t.Fatalf("failed to open test sqlite db: %v", err)
+func (m *mockAdminRepo) GetByUsername(ctx context.Context, username string) (*domain.Admin, error) {
+	if m.admin != nil && m.admin.Username == username {
+		return m.admin, nil
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockAdminRepo) GetByID(ctx context.Context, id string) (*domain.Admin, error) {
+	if m.admin != nil && m.admin.ID == id {
+		return m.admin, nil
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockAdminRepo) Create(ctx context.Context, admin *domain.Admin) error {
+	m.admin = admin
+	return nil
+}
+
+func (m *mockAdminRepo) UpdateLastLogin(ctx context.Context, id string, lastLogin time.Time) error {
+	return nil
+}
+
+type mockDeviceRepo struct {
+	device *domain.Device
+}
+
+func (m *mockDeviceRepo) GetByID(ctx context.Context, id string) (*domain.Device, error) {
+	if m.device != nil && m.device.ID == id {
+		return m.device, nil
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockDeviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*domain.Device, error) {
+	if m.device != nil && m.device.ApiKeyHash == hash {
+		return m.device, nil
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockDeviceRepo) List(ctx context.Context) ([]*domain.Device, error) {
+	if m.device != nil {
+		return []*domain.Device{m.device}, nil
+	}
+	return []*domain.Device{}, nil
+}
+
+func (m *mockDeviceRepo) Create(ctx context.Context, device *domain.Device) error {
+	m.device = device
+	return nil
+}
+
+func (m *mockDeviceRepo) UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error {
+	return nil
+}
+
+func (m *mockDeviceRepo) UpdateState(ctx context.Context, state *domain.DeviceState) error {
+	return nil
+}
+
+func (m *mockDeviceRepo) Delete(ctx context.Context, id string) error {
+	m.device = nil
+	return nil
+}
+
+type mockUserRepo struct {
+	users []*domain.User
+}
+
+func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockUserRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*domain.User, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockUserRepo) List(ctx context.Context, unenrolledOnly bool) ([]*domain.User, error) {
+	return m.users, nil
+}
+func (m *mockUserRepo) Create(ctx context.Context, user *domain.User) error {
+	m.users = append(m.users, user)
+	return nil
+}
+func (m *mockUserRepo) Update(ctx context.Context, user *domain.User) error { return nil }
+func (m *mockUserRepo) Delete(ctx context.Context, id string) error          { return nil }
+func (m *mockUserRepo) GetLatestVersion(ctx context.Context) (int, error)    { return 1, nil }
+func (m *mockUserRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*domain.User, error) {
+	return m.users, nil
+}
+func (m *mockUserRepo) SaveEmbedding(ctx context.Context, embedding *domain.UserEmbedding) error {
+	return nil
+}
+func (m *mockUserRepo) GetEmbedding(ctx context.Context, userID string) (*domain.UserEmbedding, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockUserRepo) DeleteEmbedding(ctx context.Context, userID string) error { return nil }
+
+type mockAttendanceRepo struct {
+	pairs []*domain.AttendancePair
+}
+
+func (m *mockAttendanceRepo) SaveEvent(ctx context.Context, event *domain.AttendanceEvent) error {
+	return nil
+}
+func (m *mockAttendanceRepo) GetEventByID(ctx context.Context, eventID string) (*domain.AttendanceEvent, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockAttendanceRepo) ListEvents(ctx context.Context, limit int) ([]*domain.AttendanceEvent, error) {
+	return nil, nil
+}
+func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*domain.AttendancePair, error) {
+	return m.pairs, nil
+}
+func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*domain.AttendancePair, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *domain.AttendancePair) error {
+	return nil
+}
+func (m *mockAttendanceRepo) UpdatePair(ctx context.Context, pair *domain.AttendancePair) error {
+	return nil
+}
+
+type mockEnrollmentRepo struct{}
+
+func (m *mockEnrollmentRepo) CreateJob(ctx context.Context, job *domain.EnrollmentJob) error {
+	return nil
+}
+func (m *mockEnrollmentRepo) ClaimPendingJob(ctx context.Context, deviceID string) (*domain.EnrollmentJob, error) {
+	return nil, nil
+}
+func (m *mockEnrollmentRepo) GetPendingJobs(ctx context.Context) ([]*domain.EnrollmentJob, error) {
+	return nil, nil
+}
+func (m *mockEnrollmentRepo) GetJobByID(ctx context.Context, id string) (*domain.EnrollmentJob, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockEnrollmentRepo) UpdateJobStatus(ctx context.Context, id, status string) error {
+	return nil
+}
+
+type mockAuditRepo struct{}
+
+func (m *mockAuditRepo) Log(ctx context.Context, log *domain.AuditLog) error { return nil }
+func (m *mockAuditRepo) List(ctx context.Context, limit int) ([]*domain.AuditLog, error) {
+	return nil, nil
+}
+
+func setupTestServer() *httptest.Server {
+	adminHash, _ := hasher.HashPassword("admin1234")
+	adminRepo := &mockAdminRepo{
+		admin: &domain.Admin{
+			ID:           "test-admin-id",
+			Username:     "admin",
+			PasswordHash: adminHash,
+			Role:         "admin",
+		},
 	}
 
-	adminRepo := sqlite.NewAdminRepository(db)
-	deviceRepo := sqlite.NewDeviceRepository(db)
-	userRepo := sqlite.NewUserRepository(db)
-	attendanceRepo := sqlite.NewAttendanceRepository(db)
-	enrollmentRepo := sqlite.NewEnrollmentRepository(db)
-	auditRepo := sqlite.NewAuditRepository(db)
+	deviceKey := "changeme-generate-with-openssl-rand-hex-32"
+	deviceHash := hasher.HashAPIKey(deviceKey)
+	deviceRepo := &mockDeviceRepo{
+		device: &domain.Device{
+			ID:         "kiosk-01",
+			Name:       "kiosk-01",
+			ApiKeyHash: deviceHash,
+			Status:     "online",
+		},
+	}
+
+	userRepo := &mockUserRepo{}
+	attendanceRepo := &mockAttendanceRepo{}
+	enrollmentRepo := &mockEnrollmentRepo{}
+	auditRepo := &mockAuditRepo{}
 
 	tokenMaker := token.NewTokenMaker("test-secret-key-1234567890")
 
@@ -51,21 +217,12 @@ func setupTestServer(t *testing.T) (*httptest.Server, *sqlite.NewTestDBHelper) {
 	}
 
 	router := handlerHttp.SetupRouter(handlers, tokenMaker, deviceUC)
-	ts := httptest.NewServer(router)
-
-	cleanup := func() {
-		ts.Close()
-		db.Close()
-		_ = os.Remove(tempDB)
-		_ = os.RemoveAll("data/test_enrollment")
-	}
-
-	return ts, &sqlite.NewTestDBHelper{Cleanup: cleanup}
+	return httptest.NewServer(router)
 }
 
 func TestHTTP_HealthCheck(t *testing.T) {
-	ts, h := setupTestServer(t)
-	defer h.Cleanup()
+	ts := setupTestServer()
+	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/health")
 	if err != nil {
@@ -79,8 +236,8 @@ func TestHTTP_HealthCheck(t *testing.T) {
 }
 
 func TestHTTP_AuthLogin_And_ProtectedRoutes(t *testing.T) {
-	ts, h := setupTestServer(t)
-	defer h.Cleanup()
+	ts := setupTestServer()
+	defer ts.Close()
 
 	// 1. Invalid login
 	body, _ := json.Marshal(map[string]string{"username": "admin", "password": "wrongpassword"})
@@ -94,7 +251,7 @@ func TestHTTP_AuthLogin_And_ProtectedRoutes(t *testing.T) {
 		t.Fatalf("expected 401 for wrong password, got %d", resp.StatusCode)
 	}
 
-	// 2. Valid login (seeded default admin)
+	// 2. Valid login
 	body, _ = json.Marshal(map[string]string{"username": "admin", "password": "admin1234"})
 	resp, err = http.Post(ts.URL+"/auth/login", "application/json", bytes.NewBuffer(body))
 	if err != nil {
@@ -138,8 +295,8 @@ func TestHTTP_AuthLogin_And_ProtectedRoutes(t *testing.T) {
 }
 
 func TestHTTP_DeviceAuth(t *testing.T) {
-	ts, h := setupTestServer(t)
-	defer h.Cleanup()
+	ts := setupTestServer()
+	defer ts.Close()
 
 	// 1. Without API key -> 401
 	resp, err := http.Get(ts.URL + "/sync/users")
