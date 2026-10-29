@@ -38,7 +38,7 @@ func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, 
 
 func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*domain.AttendancePair, error) {
 	for _, p := range m.pairs {
-		if p.UserID == userID && p.WorkDate == workDate {
+		if p.UserID == userID && p.WorkDate == workDate && p.Status == "open" {
 			return p, nil
 		}
 	}
@@ -97,5 +97,24 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 	}
 	if repo.pairs[0].HoursWorked == nil || *repo.pairs[0].HoursWorked < 7.9 {
 		t.Fatalf("expected ~8 hours worked")
+	}
+
+	// Test second session (e.g. after lunch return) on the same day
+	eventIn2 := &domain.AttendanceEvent{
+		EventID:   "evt-3",
+		UserID:    "user-100",
+		Direction: "IN",
+		CreatedAt: now.Add(9 * time.Hour),
+	}
+	err = uc.ProcessEvent(context.Background(), eventIn2)
+	if err != nil {
+		t.Fatalf("expected no error on second check-in, got %v", err)
+	}
+
+	if len(repo.pairs) != 2 {
+		t.Fatalf("expected 2 separate pairs for multiple sessions, got %d", len(repo.pairs))
+	}
+	if repo.pairs[1].Status != "open" {
+		t.Fatalf("expected second pair to be open, got %s", repo.pairs[1].Status)
 	}
 }

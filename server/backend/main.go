@@ -21,8 +21,13 @@ func main() {
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
+	isProd := os.Getenv("ENV") == "production" || os.Getenv("GIN_MODE") == "release"
 	if jwtSecret == "" {
-		jwtSecret = "attendance-super-secret-production-jwt-key"
+		if isProd {
+			log.Fatalf("FATAL: JWT_SECRET environment variable is required in production mode.")
+		}
+		log.Println("⚠️ WARNING: JWT_SECRET is not set. Using fallback development key. DO NOT USE IN PRODUCTION.")
+		jwtSecret = "attendance-dev-fallback-secret-key-change-in-prod"
 	}
 
 	uploadDir := os.Getenv("UPLOAD_DIR")

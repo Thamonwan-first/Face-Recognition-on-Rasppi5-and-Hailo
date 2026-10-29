@@ -205,6 +205,7 @@ class Database:
                 """,
                 (user_id, employee_id, name, department, now_iso),
             )
+            cursor.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
             cursor.execute(
                 """
                 INSERT INTO user_embeddings

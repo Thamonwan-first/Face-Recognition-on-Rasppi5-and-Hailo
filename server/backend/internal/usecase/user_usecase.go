@@ -64,7 +64,6 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 	}
 
 	now := time.Now().UTC()
-	latestV, _ := uc.userRepo.GetLatestVersion(ctx)
 
 	user := &domain.User{
 		ID:         uuid.NewString(),
@@ -75,7 +74,6 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 		Name:       dto.Name,
 		Department: dto.Department,
 		Status:     dto.Status,
-		Version:    latestV + 1,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -136,8 +134,6 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 		user.Status = dto.Status
 	}
 
-	latestV, _ := uc.userRepo.GetLatestVersion(ctx)
-	user.Version = latestV + 1
 	user.UpdatedAt = time.Now().UTC()
 
 	if err := uc.userRepo.Update(ctx, user); err != nil {

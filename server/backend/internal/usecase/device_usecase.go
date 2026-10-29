@@ -55,10 +55,7 @@ func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *Devi
 	_, _ = rand.Read(rawBytes)
 	apiKey := hex.EncodeToString(rawBytes)
 
-	hash, err := hasher.HashPassword(apiKey)
-	if err != nil {
-		return nil, domain.ErrInternalServer
-	}
+	hash := hasher.HashAPIKey(apiKey)
 
 	now := time.Now().UTC()
 	device := &domain.Device{
@@ -90,6 +87,17 @@ func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *Devi
 }
 
 func (uc *DeviceUseCase) AuthenticateDevice(ctx context.Context, apiKey string) (*domain.Device, error) {
+	if apiKey == "" {
+		return nil, domain.ErrUnauthorized
+	}
+
+	hash := hasher.HashAPIKey(apiKey)
+	device, err := uc.deviceRepo.GetByApiKeyHash(ctx, hash)
+	if err == nil && device != nil {
+		return device, nil
+	}
+
+	// Backward compatibility fallback for legacy bcrypt keys
 	devices, err := uc.deviceRepo.List(ctx)
 	if err != nil {
 		return nil, domain.ErrUnauthorized

@@ -70,7 +70,7 @@ class UserSyncWorker:
         headers = {"X-API-Key": self.config.api_key}
 
         try:
-            res = requests.get(url, headers=headers, timeout=5, verify=False)
+            res = requests.get(url, headers=headers, timeout=5, verify=self.config.ssl_verify)
             if res.status_code != 200:
                 return
 
@@ -107,13 +107,12 @@ class UserSyncWorker:
                     emb_b64 = u.get("embedding_b64")
                     if emb_b64:
                         emb_bytes = base64.b64decode(emb_b64)
+                        # Ensure no duplicate embeddings exist for this user
+                        cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
                         cur.execute(
                             """
                             INSERT INTO user_embeddings (id, user_id, embedding, model_version, source)
                             VALUES (?, ?, ?, 'arcface_mobilefacenet_v1', 'server_sync')
-                            ON CONFLICT(id) DO UPDATE SET
-                              embedding=excluded.embedding,
-                              model_version=excluded.model_version
                             """,
                             (f"emb-{user_id}", user_id, emb_bytes)
                         )

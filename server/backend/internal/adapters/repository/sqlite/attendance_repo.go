@@ -151,7 +151,7 @@ func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate stri
 	query := `
 	SELECT id, user_id, check_in_event_id, check_out_event_id, work_date, hours_worked, status, created_at, updated_at
 	FROM attendance_pairs
-	WHERE user_id = ? AND work_date = ?
+	WHERE user_id = ? AND work_date = ? AND status = 'open'
 	ORDER BY created_at DESC LIMIT 1
 	`
 	row := r.db.QueryRowContext(ctx, query, userID, workDate)

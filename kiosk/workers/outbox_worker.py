@@ -85,11 +85,15 @@ class OutboxWorker:
         if events:
             url = f"{self.config.server_url.rstrip('/')}/sync/events"
             try:
-                res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=False)
+                res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=self.config.ssl_verify)
                 if res.status_code == 200:
                     cur.execute(
                         f"UPDATE outbox SET synced = 1 WHERE id IN ({','.join(['?']*len(valid_row_ids))})",
                         valid_row_ids
+                    )
+                    # Retention cleanup: purge synced outbox records older than 7 days to preserve SD card storage
+                    cur.execute(
+                        "DELETE FROM outbox WHERE synced = 1 AND created_at < datetime('now', '-7 days')"
                     )
                     conn.commit()
                     logger.info("Successfully synced %d events to server", len(events))
@@ -119,7 +123,7 @@ class OutboxWorker:
                             p["embedding_b64"] = base64.b64encode(raw_bytes).decode("utf-8")
 
                 enroll_url = f"{self.config.server_url.rstrip('/')}/sync/enrollment"
-                res = requests.post(enroll_url, json=p, headers=headers, timeout=5, verify=False)
+                res = requests.post(enroll_url, json=p, headers=headers, timeout=5, verify=self.config.ssl_verify)
                 if res.status_code == 200:
                     cur.execute("UPDATE outbox SET synced = 1 WHERE id = ?", (row_id,))
                     conn.commit()

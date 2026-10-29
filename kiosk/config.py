@@ -42,6 +42,14 @@ class KioskConfig:
 
     server_url: str = _RAW.get("server", {}).get("url", os.getenv("SERVER_URL", "https://localhost:8443"))
     api_key: str = _RAW.get("server", {}).get("api_key", os.getenv("API_KEY", ""))
+    ca_cert: str = _RAW.get("server", {}).get("ca_cert", os.getenv("CA_CERT", ""))
+
+    @property
+    def ssl_verify(self):
+        """Return CA bundle path if configured and exists, otherwise False."""
+        if self.ca_cert and Path(self.ca_cert).exists():
+            return self.ca_cert
+        return False
 
     recognition_threshold: float = float(_RAW.get("recognition", {}).get("threshold", 0.55))
     debounce_seconds: int = int(_RAW.get("recognition", {}).get("debounce_seconds", 30))

@@ -16,6 +16,7 @@ type AdminRepository interface {
 
 type DeviceRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.Device, error)
+	GetByApiKeyHash(ctx context.Context, hash string) (*domain.Device, error)
 	List(ctx context.Context) ([]*domain.Device, error)
 	Create(ctx context.Context, device *domain.Device) error
 	UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error

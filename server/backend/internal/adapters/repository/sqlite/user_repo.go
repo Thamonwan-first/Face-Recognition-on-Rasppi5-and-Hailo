@@ -70,22 +70,32 @@ func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*domain.Use
 func (r *userRepo) Create(ctx context.Context, u *domain.User) error {
 	query := `
 	INSERT INTO users (id, employee_id, title, first_name, last_name, name, department, status, version, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(version), 0) + 1 FROM users), ?, ?)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		u.ID, u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.Version, u.CreatedAt, u.UpdatedAt)
-	return err
+		u.ID, u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.CreatedAt, u.UpdatedAt)
+	if err != nil {
+		return err
+	}
+	_ = r.db.QueryRowContext(ctx, "SELECT version FROM users WHERE id = ?", u.ID).Scan(&u.Version)
+	return nil
 }
 
 func (r *userRepo) Update(ctx context.Context, u *domain.User) error {
 	query := `
 	UPDATE users SET
-		employee_id = ?, title = ?, first_name = ?, last_name = ?, name = ?, department = ?, status = ?, version = ?, updated_at = ?
+		employee_id = ?, title = ?, first_name = ?, last_name = ?, name = ?, department = ?, status = ?,
+		version = (SELECT COALESCE(MAX(version), 0) + 1 FROM users),
+		updated_at = ?
 	WHERE id = ?
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.Version, u.UpdatedAt, u.ID)
-	return err
+		u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.UpdatedAt, u.ID)
+	if err != nil {
+		return err
+	}
+	_ = r.db.QueryRowContext(ctx, "SELECT version FROM users WHERE id = ?", u.ID).Scan(&u.Version)
+	return nil
 }
 
 func (r *userRepo) Delete(ctx context.Context, id string) error {

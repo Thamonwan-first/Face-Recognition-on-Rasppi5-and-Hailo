@@ -10,6 +10,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+type NewTestDBHelper struct {
+	Cleanup func()
+}
+
 func NewSQLiteDB(dbPath string) (*sql.DB, error) {
 	if dbPath == "" {
 		dbPath = "data/server.db"
@@ -63,6 +67,7 @@ func createSchema(db *sql.DB) error {
 		created_at DATETIME,
 		revoked_at DATETIME
 	);
+	CREATE INDEX IF NOT EXISTS idx_devices_api_key_hash ON devices(api_key_hash);
 
 	CREATE TABLE IF NOT EXISTS device_state (
 		device_id TEXT PRIMARY KEY,
@@ -156,7 +161,12 @@ func seedDefaults(db *sql.DB) error {
 	var count int
 	_ = db.QueryRow("SELECT COUNT(*) FROM admins WHERE username = 'admin'").Scan(&count)
 	if count == 0 {
-		hash, _ := hasher.HashPassword("admin1234")
+		defaultPass := os.Getenv("ADMIN_DEFAULT_PASSWORD")
+		if defaultPass == "" {
+			defaultPass = "admin1234"
+			fmt.Println("⚠️ NOTICE: Created default admin 'admin' with initial password 'admin1234'. Change this immediately.")
+		}
+		hash, _ := hasher.HashPassword(defaultPass)
 		_, _ = db.Exec(
 			"INSERT INTO admins (id, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
 			"admin-default-uuid", "admin", hash, "admin",
@@ -167,7 +177,7 @@ func seedDefaults(db *sql.DB) error {
 	var devCount int
 	_ = db.QueryRow("SELECT COUNT(*) FROM devices WHERE id = 'kiosk-01'").Scan(&devCount)
 	if devCount == 0 {
-		kioskHash, _ := hasher.HashPassword("changeme-generate-with-openssl-rand-hex-32")
+		kioskHash := hasher.HashAPIKey("changeme-generate-with-openssl-rand-hex-32")
 		_, _ = db.Exec(
 			"INSERT INTO devices (id, name, location, direction, api_key_hash, status, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
 			"kiosk-01", "kiosk-01", "", "AUTO", kioskHash, "offline",
@@ -176,6 +186,10 @@ func seedDefaults(db *sql.DB) error {
 			"INSERT OR IGNORE INTO device_state (device_id, applied_version, model_version, sw_version, updated_at) VALUES (?, 0, '', '', CURRENT_TIMESTAMP)",
 			"kiosk-01",
 		)
+	} else {
+		// Update kiosk-01 hash to SHA-256 for instant O(1) lookup
+		kioskHash := hasher.HashAPIKey("changeme-generate-with-openssl-rand-hex-32")
+		_, _ = db.Exec("UPDATE devices SET api_key_hash = ? WHERE id = 'kiosk-01' AND (api_key_hash LIKE '$2a$%' OR api_key_hash LIKE '$2b$%')", kioskHash)
 	}
 
 	return nil

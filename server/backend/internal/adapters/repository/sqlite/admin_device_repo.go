@@ -72,6 +72,15 @@ func NewDeviceRepository(db *sql.DB) ports.DeviceRepository {
 
 func (r *deviceRepo) GetByID(ctx context.Context, id string) (*domain.Device, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, last_seen, created_at, revoked_at FROM devices WHERE id = ?", id)
+	return scanDeviceRow(row)
+}
+
+func (r *deviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*domain.Device, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, last_seen, created_at, revoked_at FROM devices WHERE api_key_hash = ? AND status != 'revoked'", hash)
+	return scanDeviceRow(row)
+}
+
+func scanDeviceRow(row *sql.Row) (*domain.Device, error) {
 	var d domain.Device
 	var lastSeen, revokedAt sql.NullTime
 	if err := row.Scan(&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &lastSeen, &d.CreatedAt, &revokedAt); err != nil {

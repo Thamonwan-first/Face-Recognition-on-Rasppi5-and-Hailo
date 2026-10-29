@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS user_embeddings (
     source          TEXT NOT NULL DEFAULT 'kiosk',    -- kiosk | dashboard
     device_id       TEXT,                             -- kiosk id
     quality_score   REAL DEFAULT 1.0,
-    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE(user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_emb_user ON user_embeddings(user_id);
 

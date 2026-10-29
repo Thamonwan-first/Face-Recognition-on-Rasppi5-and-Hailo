@@ -57,19 +57,20 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *domain.Att
 	if err != nil || pair == nil {
 		// Create new pair
 		newPair := &domain.AttendancePair{
-			UserID:      event.UserID,
-			WorkDate:    workDate,
-			Status:      "open",
-			CreatedAt:   time.Now().UTC(),
-			UpdatedAt:   time.Now().UTC(),
+			UserID:    event.UserID,
+			WorkDate:  workDate,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
 		}
 
 		if event.Direction == "OUT" {
 			newPair.CheckOutEventID = &event.EventID
 			newPair.CheckOutTime = &event.CreatedAt
+			newPair.Status = "closed"
 		} else {
 			newPair.CheckInEventID = &event.EventID
 			newPair.CheckInTime = &event.CreatedAt
+			newPair.Status = "open"
 		}
 		return uc.attendanceRepo.SavePair(ctx, newPair)
 	}
