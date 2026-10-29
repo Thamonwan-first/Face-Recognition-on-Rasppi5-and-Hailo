@@ -259,3 +259,40 @@ npm run dev
 | **13-14** | การทดสอบรวมระบบจริง (End-to-End Test, Latency, ทดสอบตัดสัญญาณเครือข่ายแล้วกู้คืน) | 🟡 กำลังดำเนินการ |
 | **14-15** | การทดสอบความเสถียร 24-48 ชม., จัดทำคู่มือการติดตั้งและการใช้งานระบบ, จัดทำรายงาน | แผนงานถัดไป |
 | **16** | นำเสนอโครงงานสหกิจศึกษาและส่งมอบระบบ | แผนงานถัดไป |
+
+---
+
+## ⚠️ ปัญหาที่ทราบแล้วและสิ่งที่ต้องแก้ไขก่อน Production (Known Issues & Future Improvements)
+
+### 🔴 Critical — ต้องแก้ก่อน Deploy จริง
+
+| # | ปัญหา | ไฟล์ | รายละเอียด |
+|---|--------|------|-----------|
+| 1 | **Hardcoded Default Password & API Key** | `server/backend/app/main.py` L28, L40 | Seed ค่าเริ่มต้น `admin1234` และ API key `changeme-...` — ต้องบังคับเปลี่ยนตอน first run หรืออ่านจาก env |
+| 2 | **JWT Secret ใช้ค่า Dev** | `server/backend/app/security.py` L19 | `JWT_SECRET` fallback เป็น `"dev-secret-change-me"` — ควร crash ถ้าไม่ set env |
+| 3 | **CORS เปิด `allow_origins=["*"]`** | `server/backend/app/main.py` L71 | อนุญาตทุก origin + `allow_credentials=True` — ควร lock เฉพาะ origin ของ dashboard |
+
+### 🟡 Should Fix — ควรแก้เพื่อความเสถียร
+
+| # | ปัญหา | ไฟล์ | รายละเอียด |
+|---|--------|------|-----------|
+| 4 | **`verify=False` ทุก HTTPS request** | `outbox_worker.py`, `user_sync.py`, `heartbeat.py` | ปิด SSL verification 4 จุด — เสี่ยง MITM ควรใช้ self-signed cert + `verify="/path/to/ca.pem"` |
+| 5 | **ไม่มี Rate Limiting** | Server API ทั้งหมด | ไม่มี rate limit → เสี่ยง brute-force login — ควรเพิ่ม `slowapi` |
+| 6 | **Outbox ไม่มี Max Retry / Dead Letter** | `outbox_worker.py` | Event ที่ sync ไม่สำเร็จจะลองซ้ำไม่จำกัด — ควรเพิ่ม `retry_count` + dead-letter |
+| 7 | **CPU Fallback ใช้ Random Embedding** | `detector.py` L260-L262 | ถ้าไม่มี ArcFace ONNX จะสร้าง embedding สุ่ม — ควรแจ้งเตือนให้ชัดเจนบน UI |
+
+### 🔵 Improvement — ปรับปรุงเพิ่มเติม
+
+| # | ปัญหา | รายละเอียด |
+|---|--------|-----------|
+| 8 | **Test Coverage น้อย** | มีแค่ 3 test files — ขาด test สำหรับ auth, face detection, enrollment, frontend |
+| 9 | **Server ยังไม่มี HTTPS จริง** | Port 8443 แต่ไม่มี `ssl_keyfile` — ควรเพิ่ม cert หรือใช้ reverse proxy |
+| 10 | **`seed_defaults()` รันทุกครั้งที่ start** | เป็น side-effect ตอน import — ควรย้ายเป็น CLI command |
+
+### ⚪ Nice to Have
+
+| # | ปัญหา | รายละเอียด |
+|---|--------|-----------|
+| 11 | **ไม่มี Log Rotation** | Kiosk ไม่มี config เขียน log ลงไฟล์หรือ rotate |
+| 12 | **Dashboard ไม่มี Realtime Update** | ใช้ REST poll — ยังไม่มี WebSocket สำหรับ live update |
+| 13 | **ยังไม่มี Deployment Script สำหรับ Kiosk** | ไม่มี systemd service file หรือ auto-start script สำหรับ Pi |

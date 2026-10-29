@@ -3,7 +3,9 @@ Edge Kiosk Synchronization API.
 Protected by X-API-Key header.
 """
 import os
+import uuid
 import base64
+from pathlib import Path
 from datetime import datetime, timezone, date
 from zoneinfo import ZoneInfo
 from typing import List, Optional
@@ -13,7 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from ..db import get_db
-from ..models import Device, DeviceState, User, UserEmbedding, AttendanceEvent, AttendancePair
+from ..models import Device, DeviceState, User, UserEmbedding, AttendanceEvent, AttendancePair, EnrollmentJob
 from ..security import validate_device_api_key
 
 LOCAL_TZ = ZoneInfo(os.getenv("SERVER_TIMEZONE", "Asia/Bangkok"))
@@ -174,3 +176,129 @@ def heartbeat(
 
     db.commit()
     return {"status": "ok", "server_time": now.isoformat()}
+
+
+@router.get("/enrollment/claim")
+def claim_enrollment_job(
+    device: Device = Depends(validate_device_api_key),
+    db: Session = Depends(get_db),
+):
+    """Kiosk device claims the oldest pending enrollment job to calculate embedding on Hailo."""
+    job = (
+        db.query(EnrollmentJob)
+        .filter(
+            EnrollmentJob.status.in_(["pending", "processing"]),
+            EnrollmentJob.processed_at == None,
+            (EnrollmentJob.assigned_device_id == None) | (EnrollmentJob.assigned_device_id == device.id),
+        )
+        .order_by(EnrollmentJob.created_at.asc())
+        .with_for_update(skip_locked=True)
+        .first()
+    )
+
+    if not job:
+        return {"job": None}
+
+    images_b64 = []
+    if job.image_path:
+        img_p = Path(job.image_path)
+        if not img_p.is_absolute():
+            base_dir = Path(__file__).resolve().parent.parent.parent
+            if not img_p.exists() and (base_dir / img_p).exists():
+                img_p = base_dir / img_p
+
+        if img_p.exists():
+            if img_p.is_dir():
+                for p in sorted(
+                    [f for ext in ("*.jpg", "*.jpeg", "*.png", "*.webp") for f in img_p.glob(ext)]
+                ):
+                    try:
+                        with open(p, "rb") as f:
+                            images_b64.append(base64.b64encode(f.read()).decode("utf-8"))
+                    except Exception:
+                        pass
+            elif img_p.is_file():
+                try:
+                    with open(img_p, "rb") as f:
+                        images_b64.append(base64.b64encode(f.read()).decode("utf-8"))
+                except Exception:
+                    pass
+
+    if not images_b64:
+        job.status = "failed"
+        db.commit()
+        return {"job": None}
+
+    job.status = "processing"
+    job.assigned_device_id = device.id
+    db.commit()
+
+    return {
+        "job": {
+            "id": job.id,
+            "user_id": job.user_id,
+            "images_b64": images_b64,
+            "image_b64": images_b64[0] if images_b64 else None,
+        }
+    }
+
+
+class KioskEnrollmentRequest(BaseModel):
+    user_id: str
+    name: str
+    employee_id: Optional[str] = None
+    department: Optional[str] = None
+    embedding_b64: Optional[str] = None
+
+
+@router.post("/enrollment")
+def sync_kiosk_enrollment(
+    req: KioskEnrollmentRequest,
+    device: Device = Depends(validate_device_api_key),
+    db: Session = Depends(get_db),
+):
+    """Receive new employee enrollment uploaded directly from Kiosk touchscreen."""
+    now = datetime.now(timezone.utc)
+    user = db.query(User).filter(User.id == req.user_id).first()
+    if not user and req.employee_id:
+        user = db.query(User).filter(User.employee_id == req.employee_id).first()
+
+    max_v = db.query(func.max(User.version)).scalar() or 0
+    new_v = max_v + 1
+
+    if not user:
+        user = User(
+            id=req.user_id,
+            name=req.name,
+            employee_id=req.employee_id,
+            department=req.department or "",
+            status="active",
+            version=new_v,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(user)
+    else:
+        user.name = req.name
+        if req.employee_id:
+            user.employee_id = req.employee_id
+        user.version = new_v
+        user.updated_at = now
+
+    if req.embedding_b64:
+        raw_emb = base64.b64decode(req.embedding_b64)
+        # ลบ embedding เก่าของ user+device เพื่อกัน duplicate เมื่อ kiosk retry
+        db.query(UserEmbedding).filter_by(user_id=user.id, device_id=device.id).delete()
+        emb_row = UserEmbedding(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            embedding=raw_emb,
+            source="kiosk",
+            device_id=device.id,
+            quality_score=1.0,
+            created_at=now,
+        )
+        db.add(emb_row)
+
+    db.commit()
+    return {"status": "ok", "user_id": user.id, "version": user.version}

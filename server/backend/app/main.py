@@ -5,6 +5,7 @@ import uuid
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from .db import engine, Base, SessionLocal
 from .models import Admin, Device, DeviceState
@@ -13,6 +14,15 @@ from .api import auth, sync, users, devices, attendance, enrollment, audit
 
 # Initialize database schema
 Base.metadata.create_all(bind=engine)
+
+# Auto-add columns if missing in SQLite
+with engine.connect() as conn:
+    for col in ("title", "first_name", "last_name"):
+        try:
+            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR"))
+            conn.commit()
+        except Exception:
+            pass
 
 
 def seed_defaults():
@@ -34,19 +44,19 @@ def seed_defaults():
         if not dev:
             db.add(Device(
                 id="kiosk-01",
-                name="ตู้บันทึกเวลา ประตูหน้า (Main Entrance)",
-                location="ชั้น 1 อาคารสำนักงานใหญ่",
+                name="kiosk-01",
+                location="",
                 direction="AUTO",
                 api_key_hash=hash_password("changeme-generate-with-openssl-rand-hex-32"),
-                status="online",
+                status="offline",
             ))
             db.add(DeviceState(
                 device_id="kiosk-01",
-                applied_version=1,
-                model_version="scrfd_2.5g + arcface_mobilefacenet",
-                sw_version="v1.0.0",
-                cpu_temp=46.5,
-                fps=30.0,
+                applied_version=0,
+                model_version="",
+                sw_version="",
+                cpu_temp=None,
+                fps=None,
             ))
         db.commit()
     except Exception as e:

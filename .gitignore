@@ -25,8 +25,9 @@ env/
 *.db-wal
 *.db-shm
 
-# HEF model files (large binaries — download or copy separately)
+# HEF / ONNX model files (large binaries — download or copy separately)
 *.hef
+*.onnx
 
 # Node.js
 node_modules/
@@ -47,3 +48,10 @@ logs/
 htmlcov/
 .coverage
 .pytest_cache/
+
+# AI / Assistant tooling
+.gemini/
+.agents/
+.trail/
+GEMINI.md
+

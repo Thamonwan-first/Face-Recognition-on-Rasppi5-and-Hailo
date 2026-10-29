@@ -13,6 +13,7 @@ from ui import create_app
 from workers.outbox_worker import OutboxWorker
 from workers.user_sync import UserSyncWorker
 from workers.heartbeat import HeartbeatWorker
+from workers.enrollment_worker import EnrollmentWorker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,12 +66,17 @@ def main() -> int:
     user_sync_worker = UserSyncWorker(config.db_full_path, config, on_users_updated=lambda: window.worker.reload_gallery())
     user_sync_worker.start()
 
+    # Background Enrollment Worker (claims jobs from server, computes ArcFace embeddings, auto-updates gallery)
+    enrollment_worker = EnrollmentWorker(detector, config, on_enrollment_done=lambda: window.worker.reload_gallery())
+    enrollment_worker.start()
+
     logger.info("Kiosk UI initialized — showing window (Fullscreen: %s)", config.fullscreen)
     window.show()
     exit_code = app.exec_()
 
     # Clean shutdown
     logger.info("Shutting down background workers and camera...")
+    enrollment_worker.stop()
     outbox_worker.stop()
     user_sync_worker.stop()
     heartbeat_worker.stop()

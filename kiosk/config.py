@@ -50,6 +50,9 @@ class KioskConfig:
 
     detect_model: str = _RAW.get("models", {}).get("detect_model", "models/scrfd_2.5g.hef")
     embedding_model: str = _RAW.get("models", {}).get("embedding_model", "models/arcface_mobilefacenet.hef")
+    anti_spoof_model: str = _RAW.get("models", {}).get("anti_spoof_model", "models/MiniFASNetV2.onnx")
+    anti_spoof_enabled: bool = bool(_RAW.get("recognition", {}).get("anti_spoof_enabled", True))
+    anti_spoof_threshold: float = float(_RAW.get("recognition", {}).get("anti_spoof_threshold", 0.85))
 
     camera_width: int = int(_RAW.get("camera", {}).get("width", 640))
     camera_height: int = int(_RAW.get("camera", {}).get("height", 480))
@@ -72,6 +75,11 @@ class KioskConfig:
     @property
     def embedding_model_path(self) -> Path:
         p = Path(self.embedding_model)
+        return p if p.is_absolute() else KIOSK_ROOT / p
+
+    @property
+    def anti_spoof_model_path(self) -> Path:
+        p = Path(self.anti_spoof_model)
         return p if p.is_absolute() else KIOSK_ROOT / p
 
     @property

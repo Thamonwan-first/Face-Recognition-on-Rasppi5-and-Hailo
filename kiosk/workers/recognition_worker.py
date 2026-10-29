@@ -9,15 +9,37 @@ from PyQt5.QtGui import QImage
 
 from alignment import align_face
 from matcher import find_best_match
+from metrics import MetricsTracker
+from anti_spoof import AntiSpoofDetector
 
 logger = logging.getLogger(__name__)
+
+
+def draw_corner_brackets(img, x1, y1, x2, y2, color=(255, 255, 255), thickness=2, corner_len=18):
+    """Draw 4 corner brackets around the face box instead of a full rectangle."""
+    w = x2 - x1
+    h = y2 - y1
+    cl = max(8, min(corner_len, w // 4, h // 4))
+    # Top-Left
+    cv2.line(img, (x1, y1), (x1 + cl, y1), color, thickness)
+    cv2.line(img, (x1, y1), (x1, y1 + cl), color, thickness)
+    # Top-Right
+    cv2.line(img, (x2, y1), (x2 - cl, y1), color, thickness)
+    cv2.line(img, (x2, y1), (x2, y1 + cl), color, thickness)
+    # Bottom-Left
+    cv2.line(img, (x1, y2), (x1 + cl, y2), color, thickness)
+    cv2.line(img, (x1, y2), (x1, y2 - cl), color, thickness)
+    # Bottom-Right
+    cv2.line(img, (x2, y2), (x2 - cl, y2), color, thickness)
+    cv2.line(img, (x2, y2), (x2, y2 - cl), color, thickness)
 
 
 class RecognitionWorker(QThread):
     """Camera capture and face recognition worker thread."""
     frame_ready = pyqtSignal(QImage)
-    face_recognized = pyqtSignal(str, float, str)
+    face_recognized = pyqtSignal(str, float, str, str, str)
     unknown_detected = pyqtSignal()
+    spoof_detected = pyqtSignal()
 
     def __init__(self, camera, detector, database, config, current_direction="AUTO"):
         super().__init__()
@@ -27,6 +49,14 @@ class RecognitionWorker(QThread):
         self.config = config
         self.current_direction = current_direction
         self._running = True
+
+        # Initialize Passive Anti-Spoofing Detector (MiniFASNetV2)
+        if getattr(config, "anti_spoof_enabled", True):
+            model_p = getattr(config, "anti_spoof_model_path", None)
+            thresh = getattr(config, "anti_spoof_threshold", 0.85)
+            self.anti_spoof = AntiSpoofDetector(model_path=model_p, threshold=thresh)
+        else:
+            self.anti_spoof = None
 
         self.gallery_cache = []
         self.reload_gallery()
@@ -48,6 +78,8 @@ class RecognitionWorker(QThread):
                     self.msleep(10)
                     continue
 
+                MetricsTracker.record_frame()
+
                 faces = self.detector.detect_faces(frame_rgb)
                 annotated = frame_rgb.copy()
 
@@ -55,7 +87,15 @@ class RecognitionWorker(QThread):
                     x1, y1, x2, y2 = f["bbox"]
                     landmarks = f.get("landmarks", [])
 
-                    # 5-point alignment & ArcFace embedding
+                    # 1. Passive Anti-Spoofing Check (MiniFASNetV2)
+                    if self.anti_spoof and self.anti_spoof.enabled:
+                        is_real, spoof_score = self.anti_spoof.check_liveness(frame_rgb, [x1, y1, x2, y2])
+                        if not is_real:
+                            # ป้องกันภาพถ่าย/หน้าจอมือถือแบบเงียบๆ ไม่แสดงข้อความกวนสายตา และไม่บันทึกเวลา
+                            draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 255, 255), thickness=2)
+                            continue
+
+                    # 2. 5-point alignment & ArcFace embedding
                     if len(landmarks) >= 5:
                         aligned = align_face(frame_rgb, np.array(landmarks, dtype=np.float32), 112)
                     else:
@@ -68,14 +108,17 @@ class RecognitionWorker(QThread):
                     emb = self.detector.extract_embedding(aligned)
                     match = find_best_match(emb, self.gallery_cache, self.config.recognition_threshold)
 
+                    # 3. Real Person: Draw normal white corner brackets
+                    draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 255, 255), thickness=2)
+
                     if match:
                         user_id, conf = match
                         user_info = self.user_lookup.get(user_id, {})
                         name = user_info.get("name", "Unknown")
+                        emp_id = user_info.get("employee_id", "")
+                        dept = user_info.get("department", "")
 
-                        # Annotate Green
-                        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 184, 148), 2)
-                        cv2.putText(annotated, f"{name} ({conf:.0%})", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 184, 148), 2)
+                        cv2.putText(annotated, name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
                         rec = self.db.record_attendance(
                             user_id,
@@ -85,14 +128,9 @@ class RecognitionWorker(QThread):
                             self.config.debounce_seconds,
                         )
                         if rec:
-                            self.face_recognized.emit(name, conf, rec["direction"])
+                            self.face_recognized.emit(name, conf, rec["direction"], emp_id, dept)
                     else:
-                        cv2.rectangle(annotated, (x1, y1), (x2, y2), (214, 48, 49), 2)
-                        cv2.putText(annotated, "Unknown", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (214, 48, 49), 2)
                         self.unknown_detected.emit()
-
-                    for pt in landmarks:
-                        cv2.circle(annotated, (int(pt[0]), int(pt[1])), 3, (9, 132, 227), -1)
 
                 h, w, ch = annotated.shape
                 qimg = QImage(annotated.data, w, h, ch * w, QImage.Format_RGB888).copy()

@@ -5,8 +5,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import DevicesPage from './pages/DevicesPage';
 import UsersPage from './pages/UsersPage';
-import AttendancePage from './pages/AttendancePage';
 import EnrollmentPage from './pages/EnrollmentPage';
+import AttendancePage from './pages/AttendancePage';
 import AuditPage from './pages/AuditPage';
 
 function DashboardLayout() {
@@ -18,8 +18,8 @@ function DashboardLayout() {
           <Route path="/" element={<Navigate to="/devices" replace />} />
           <Route path="/devices" element={<DevicesPage />} />
           <Route path="/users" element={<UsersPage />} />
-          <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/enrollment" element={<EnrollmentPage />} />
+          <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="*" element={<Navigate to="/devices" replace />} />
         </Routes>

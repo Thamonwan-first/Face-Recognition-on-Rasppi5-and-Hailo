@@ -3,20 +3,23 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 
+function formatThaiDateTime(dateStr) {
+  if (!dateStr) return 'ไม่เคย';
+  const utcStr = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`;
+  return new Date(utcStr).toLocaleString('th-TH');
+}
+
 export default function DevicesPage() {
-  const { data: devices, isLoading, error, refetch } = useQuery({
+  const { data: devices, isLoading, error } = useQuery({
     queryKey: ['devices'],
     queryFn: () => api.get('/api/devices/status'),
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: 2000, // Real-time poll every 2s
   });
 
   return (
     <div>
       <div className="page-header">
         <h1 className="page-title">🖥️ รายการอุปกรณ์ (Devices)</h1>
-        <button onClick={() => refetch()} className="btn btn-primary">
-          🔄 รีเฟรชข้อมูล
-        </button>
       </div>
 
       {isLoading && <p>กำลังโหลดข้อมูลอุปกรณ์...</p>}
@@ -36,15 +39,11 @@ export default function DevicesPage() {
             </div>
 
             <ul className="card-details">
-              <li>📍 สถานที่: {device.location || '-'}</li>
-              <li>↔️ ทิศทาง: {device.direction || 'AUTO'}</li>
-              <li>🌡️ อุณหภูมิ CPU: {device.cpu_temp ? `${device.cpu_temp}°C` : '-'}</li>
-              <li>🎯 FPS กล้อง: {device.fps ? `${device.fps}` : '-'}</li>
-              <li>📤 รายการรอส่ง (Outbox): {device.outbox_pending ?? 0}</li>
-              <li>🔄 เวอร์ชันข้อมูลที่ซิงก์: v{device.applied_version ?? 0}</li>
+              <li>🌡️ อุณหภูมิ CPU: {device.cpu_temp != null ? `${device.cpu_temp}°C` : '-'}</li>
+              <li>🎯 FPS กล้อง: {device.fps != null ? `${device.fps}` : '-'}</li>
               <li>
                 ⏰ ออนไลน์ล่าสุด:{' '}
-                {device.last_seen ? new Date(device.last_seen).toLocaleString('th-TH') : 'ไม่เคย'}
+                {formatThaiDateTime(device.last_seen)}
               </li>
             </ul>
           </div>

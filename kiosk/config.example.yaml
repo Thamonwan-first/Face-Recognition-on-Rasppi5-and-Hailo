@@ -9,7 +9,7 @@ device:
   direction: "AUTO"        # IN | OUT | AUTO
 
 server:
-  url: "https://192.168.1.100:8443"
+  url: "http://localhost:8443"
   api_key: "changeme-generate-with-openssl-rand-hex-32"
 
 recognition:
@@ -17,10 +17,13 @@ recognition:
   debounce_seconds: 30     # Prevent duplicate scans within N seconds
   min_enroll_images: 3     # Minimum photos needed for face registration
   max_enroll_images: 5     # Maximum photos
+  anti_spoof_enabled: true # เปิดใช้งาน AI ตรวจสอบคนจริง ป้องกันรูปถ่าย/จอมือถือ
+  anti_spoof_threshold: 0.85 # ค่าความมั่นใจคนจริง (0.80 - 0.95)
 
 models:
   detect_model: "models/scrfd_2.5g.hef"        # or models/scrfd_10g.hef
   embedding_model: "models/arcface_mobilefacenet.hef"
+  anti_spoof_model: "models/MiniFASNetV2.onnx" # โมเดลตรวจจับคนจริง (Passive Liveness)
 
 camera:
   width: 640

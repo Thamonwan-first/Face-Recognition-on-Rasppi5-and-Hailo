@@ -5,16 +5,15 @@ Device API key verification, and Audit Logging.
 import os
 import json
 from datetime import datetime, timedelta, timezone
+import bcrypt
 from fastapi import Header, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from passlib.context import CryptContext
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
 from .db import get_db
 from .models import Admin, Device, AuditLog
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security_bearer = HTTPBearer(auto_error=False)
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
@@ -23,11 +22,18 @@ ACCESS_TOKEN_EXPIRE_HOURS = 8
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8")[:72], salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8")[:72],
+            hashed_password.encode("utf-8")
+        )
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict) -> str:

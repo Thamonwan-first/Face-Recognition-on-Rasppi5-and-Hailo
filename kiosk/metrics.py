@@ -1,44 +1,70 @@
 """
 System metrics monitoring for Raspberry Pi 5 & Hailo-8.
-Measures CPU temperature, FPS, and outbox queue size.
+Measures real CPU temperature, camera FPS, and outbox queue size.
 """
-import os
+import glob
 import time
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
 
 class MetricsTracker:
-    """Tracks application FPS and system metrics."""
+    """Tracks real application FPS and hardware system metrics."""
 
-    def __init__(self):
-        self._frame_count = 0
-        self._last_fps_time = time.time()
-        self.current_fps = 0.0
+    _lock = threading.Lock()
+    _latest_fps = 0.0
+    _frame_count = 0
+    _last_fps_time = time.time()
 
-    def tick_frame(self) -> float:
-        """Call on every processed frame to calculate rolling FPS."""
-        self._frame_count += 1
-        now = time.time()
-        elapsed = now - self._last_fps_time
-        if elapsed >= 1.0:
-            self.current_fps = round(self._frame_count / elapsed, 1)
-            self._frame_count = 0
-            self._last_fps_time = now
-        return self.current_fps
+    @classmethod
+    def record_frame(cls) -> float:
+        """Call on every processed frame to calculate real rolling FPS."""
+        with cls._lock:
+            cls._frame_count += 1
+            now = time.time()
+            elapsed = now - cls._last_fps_time
+            if elapsed >= 1.0:
+                cls._latest_fps = round(cls._frame_count / elapsed, 1)
+                cls._frame_count = 0
+                cls._last_fps_time = now
+            return cls._latest_fps
+
+    @classmethod
+    def get_fps(cls) -> float:
+        """Return the latest measured real FPS."""
+        with cls._lock:
+            return cls._latest_fps
 
     @staticmethod
-    def get_cpu_temperature() -> float:
-        """Read Raspberry Pi 5 SoC temperature."""
-        thermal_path = "/sys/class/thermal/thermal_zone0/temp"
-        if os.path.exists(thermal_path):
+    def get_cpu_temperature():
+        """Read real hardware CPU temperature (works on both Pi 5 and Linux PC)."""
+        # 1. Thermal zones (Raspberry Pi & modern Linux)
+        for p in sorted(glob.glob("/sys/class/thermal/thermal_zone*/temp")):
             try:
-                with open(thermal_path, "r") as f:
-                    return round(float(f.read().strip()) / 1000.0, 1)
+                with open(p, "r") as f:
+                    val = float(f.read().strip())
+                    if val > 1000:
+                        val /= 1000.0
+                    if 10.0 <= val <= 115.0:
+                        return round(val, 1)
             except Exception:
                 pass
-        return 45.0  # Simulated default on non-Pi systems
+
+        # 2. Hwmon hardware sensors (common on PC / Laptop)
+        for p in sorted(glob.glob("/sys/class/hwmon/hwmon*/temp*_input")):
+            try:
+                with open(p, "r") as f:
+                    val = float(f.read().strip())
+                    if val > 1000:
+                        val /= 1000.0
+                    if 10.0 <= val <= 115.0:
+                        return round(val, 1)
+            except Exception:
+                pass
+
+        return None
 
     @staticmethod
     def get_outbox_pending_count(conn) -> int:

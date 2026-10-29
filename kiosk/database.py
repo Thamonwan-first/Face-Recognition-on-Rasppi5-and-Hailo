@@ -5,6 +5,7 @@ for user embeddings, attendance events, and offline outbox.
 """
 import json
 import uuid
+import base64
 import sqlite3
 import logging
 from pathlib import Path
@@ -51,7 +52,7 @@ class Database:
     def load_active_gallery(self) -> list[dict]:
         """Load all active users and 512-d embeddings into RAM."""
         sql = """
-            SELECT u.id AS user_id, u.name, u.employee_id, e.embedding
+            SELECT u.id AS user_id, u.name, u.employee_id, u.department, e.embedding
             FROM users u
             JOIN user_embeddings e ON u.id = e.user_id
             WHERE u.status = 'active' AND u.deleted_at IS NULL
@@ -71,6 +72,7 @@ class Database:
                     "user_id": r["user_id"],
                     "name": r["name"],
                     "employee_id": r["employee_id"] or "",
+                    "department": r["department"] or "",
                     "embedding": emb,
                 })
         logger.info("Loaded %d face embeddings into RAM gallery", len(gallery))
@@ -216,7 +218,17 @@ class Database:
                 INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
                 VALUES (?, 'user_enrollment', ?, ?, 0, 0)
                 """,
-                (user_id, json.dumps({"user_id": user_id, "name": name, "employee_id": employee_id}), now_iso),
+                (
+                    user_id,
+                    json.dumps({
+                        "user_id": user_id,
+                        "name": name,
+                        "employee_id": employee_id,
+                        "department": department,
+                        "embedding_b64": base64.b64encode(emb_bytes).decode("utf-8"),
+                    }),
+                    now_iso,
+                ),
             )
             self.conn.commit()
             return user_id

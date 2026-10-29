@@ -53,7 +53,12 @@ class HeartbeatWorker:
                 self._send_heartbeat()
             except Exception as e:
                 logger.error("Heartbeat error: %s", e)
-            time.sleep(60)
+
+            # Sleep 15 seconds (checks _running every 0.5s for clean shutdown)
+            for _ in range(30):
+                if not self._running:
+                    break
+                time.sleep(0.5)
 
     def _send_heartbeat(self):
         url = f"{self.config.server_url.rstrip('/')}/sync/heartbeat"
@@ -71,7 +76,7 @@ class HeartbeatWorker:
             "sw_version": "v1.0.0",
             "model_version": "scrfd_2.5g + arcface_mobilefacenet",
             "cpu_temp": MetricsTracker.get_cpu_temperature(),
-            "fps": 30.0,
+            "fps": MetricsTracker.get_fps(),
             "outbox_pending": MetricsTracker.get_outbox_pending_count(conn),
         }
 

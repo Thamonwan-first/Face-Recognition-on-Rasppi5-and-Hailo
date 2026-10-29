@@ -1,8 +1,9 @@
 """
-PyQt5 Touchscreen UI for Kiosk (Portrait / จอแนวตั้ง 480×800).
-Minimalist Design: แสดงเฉพาะ เวลา, กล้องสด, และผลการสแกน (ใครสแกน / ไม่พบข้อมูล)
+PyQt5 Touchscreen UI for Kiosk (Portrait / จอแนวตั้ง).
+Full-Screen Borderless Camera View + Modern Center Floating Glass Card.
 """
 import sys
+import time
 import logging
 from datetime import datetime
 import numpy as np
@@ -11,23 +12,20 @@ from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 from PyQt5.QtGui import QImage, QPixmap, QFont
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel,
-    QVBoxLayout, QHBoxLayout, QFrame, QDialog, QLineEdit, QMessageBox, QPushButton
+    QVBoxLayout, QHBoxLayout, QFrame, QDialog, QSizePolicy
 )
 
-from alignment import align_face
 from workers.recognition_worker import RecognitionWorker
 
 logger = logging.getLogger(__name__)
 
-# Minimalist Dark Theme
-DARK_BG = "#12181f"
-CARD_BG = "#1e272e"
-BORDER_COLOR = "#2d3436"
-ACCENT_GREEN = "#00b894"
-ACCENT_RED = "#d63031"
-ACCENT_BLUE = "#0984e3"
-TEXT_PRIMARY = "#f5f6fa"
-TEXT_SECONDARY = "#a4b0be"
+# Modern Deep Navy & Website Tech-Blue Palette (#0984e3)
+DARK_BG = "#0b1320"
+CARD_BG = "#131f33"
+BRAND_BLUE = "#0984e3"       # สีน้ำเงินหลักของเว็บไซต์
+BRAND_CYAN = "#74b9ff"       # สีฟ้าไฮไลต์
+TEXT_PRIMARY = "#f8fafc"
+TEXT_SECONDARY = "#94a3b8"
 
 THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -35,12 +33,96 @@ THAI_MONTHS = [
 ]
 
 
+class AttendanceSuccessPopup(QDialog):
+    """
+    ป๊อปอัปแจ้งผลการลงเวลาสำเร็จ ดีไซน์กระจกโมเดิร์น (Glassmorphism)
+    ขอบสีน้ำเงินเข้ากับเว็บไซต์ ปิดเองอัตโนมัติใน 2.5 วินาที
+    """
+    def __init__(self, parent, name, direction_text, time_str, emp_id="", division=""):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setFixedSize(420, 230)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+
+        card = QFrame(self)
+        card.setStyleSheet(
+            f"""
+            QFrame {{
+                background-color: rgba(11, 19, 32, 0.94);
+                border: 2px solid {BRAND_BLUE};
+                border-radius: 20px;
+            }}
+            """
+        )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(6)
+
+        # 1. หัวข้อสถานะ
+        title = QLabel("✨ บันทึกเวลาสำเร็จ")
+        title.setFont(QFont("Sans", 15, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(f"color: {BRAND_CYAN}; border: none; background: transparent;")
+        layout.addWidget(title)
+
+        # 2. ชื่อ-นามสกุล พร้อมคำนำหน้า
+        name_lbl = QLabel(name)
+        name_lbl.setFont(QFont("Sans", 21, QFont.Bold))
+        name_lbl.setAlignment(Qt.AlignCenter)
+        name_lbl.setStyleSheet("color: #ffffff; border: none; background: transparent;")
+        name_lbl.setWordWrap(True)
+        layout.addWidget(name_lbl)
+
+        # 3. รหัสพนักงาน และ สังกัดฝ่าย
+        sub_items = []
+        if emp_id:
+            sub_items.append(f"รหัส: {emp_id}")
+        if division:
+            sub_items.append(division)
+        sub_text = " • ".join(sub_items) if sub_items else ""
+
+        if sub_text:
+            sub_lbl = QLabel(sub_text)
+            sub_lbl.setFont(QFont("Sans", 12, QFont.Bold))
+            sub_lbl.setAlignment(Qt.AlignCenter)
+            sub_lbl.setStyleSheet(f"color: {BRAND_CYAN}; border: none; background: transparent;")
+            sub_lbl.setWordWrap(True)
+            layout.addWidget(sub_lbl)
+
+        # 4. ทิศทางและเวลา
+        time_lbl = QLabel(f"บันทึก: {direction_text} • เวลา {time_str} น.")
+        time_lbl.setFont(QFont("Sans", 12))
+        time_lbl.setAlignment(Qt.AlignCenter)
+        time_lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; border: none; background: transparent;")
+        layout.addWidget(time_lbl)
+
+        outer.addWidget(card)
+
+        # จัดตำแหน่งกึ่งกลางหน้าต่างหลัก
+        if parent:
+            geo = parent.geometry()
+            self.move(
+                geo.x() + (geo.width() - self.width()) // 2,
+                geo.y() + (geo.height() - self.height()) // 2,
+            )
+
+        # ปิดอัตโนมัติใน 2.5 วินาที
+        QTimer.singleShot(2500, self.close)
+
+    def mousePressEvent(self, event):
+        self.close()
+
+
 class MainWindow(QMainWindow):
     """
-    Minimalist Kiosk Screen:
-    1. เวลา (Digital Clock + Date)
-    2. หน้าจอกล้อง (Live Camera Feed)
-    3. ผลการสแกน (ชื่อคนสแกน / ไม่พบข้อมูลใบหน้า)
+    Kiosk Screen:
+    - กล้องสดไร้ขอบ ขยายเต็มหน้าจอ (Full-Screen Camera)
+    - แถบเวลาด้านบน (Minimal Floating Top Bar)
+    - ไม่มีการ์ดล่างเกะกะสายตา
+    - แจ้งเตือนด้วย Floating Glass Card ตรงกลางจอ
     """
     def __init__(self, config, camera, detector, database):
         super().__init__()
@@ -49,6 +131,7 @@ class MainWindow(QMainWindow):
         self.detector = detector
         self.db = database
         self.current_direction = config.device_direction
+        self._active_popup = None
 
         self.setWindowTitle("Face Attendance Kiosk")
         self.setStyleSheet(f"background-color: {DARK_BG}; color: {TEXT_PRIMARY};")
@@ -56,7 +139,7 @@ class MainWindow(QMainWindow):
         if config.fullscreen:
             self.showFullScreen()
         else:
-            self.resize(config.display_width, config.display_height)
+            self.setFixedSize(config.display_width, config.display_height)
 
         self._build_ui()
         self._start_clock()
@@ -67,16 +150,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # ── 1. ส่วนเวลา (Clock & Date - แถวแนวนอนกะทัดรัด) ────────
-        time_card = QFrame()
-        time_card.setStyleSheet(
-            f"background-color: {CARD_BG}; border-radius: 10px;"
+        # ── 1. ส่วนเวลาลอยด้านบน (Minimal Header) ────────────────
+        time_bar = QFrame()
+        time_bar.setStyleSheet(
+            f"background-color: {CARD_BG}; border-bottom: 1px solid rgba(255,255,255,0.08);"
         )
-        t_layout = QHBoxLayout(time_card)
-        t_layout.setContentsMargins(14, 6, 14, 6)
+        t_layout = QHBoxLayout(time_bar)
+        t_layout.setContentsMargins(16, 8, 16, 8)
 
         self.clock_label = QLabel("00:00:00")
         self.clock_label.setFont(QFont("Monospace", 22, QFont.Bold))
@@ -90,57 +173,16 @@ class MainWindow(QMainWindow):
         self.date_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
         t_layout.addWidget(self.date_label)
 
-        layout.addWidget(time_card)
+        layout.addWidget(time_bar)
 
-        # ── 2. หน้าจอกล้อง (Live Camera Preview - ขยายสูงเต็มตา) ──
-        self.cam_frame = QFrame()
-        self.cam_frame.setStyleSheet(
-            f"background-color: #000000; border: 3px solid {BORDER_COLOR}; border-radius: 14px;"
-        )
-        c_layout = QVBoxLayout(self.cam_frame)
-        c_layout.setContentsMargins(2, 2, 2, 2)
-
+        # ── 2. หน้าจอกล้องสดเต็มจอ (Full-Screen Borderless Camera) ──
         self.cam_label = QLabel("กำลังเริ่มกล้อง...")
         self.cam_label.setAlignment(Qt.AlignCenter)
-        self.cam_label.setStyleSheet("border-radius: 12px; background-color: #000000;")
-        c_layout.addWidget(self.cam_label)
+        self.cam_label.setStyleSheet("background-color: #000000; border: none;")
+        self.cam_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.cam_label.setMinimumSize(1, 1)
 
-        # ให้กล้องขยายพื้นที่แนวตั้งสูงสุด (stretch=1)
-        layout.addWidget(self.cam_frame, stretch=1)
-
-        # ── 3. ด้านล่าง: ชื่อ + เวลา และ ปุ่มลงทะเบียน ──────────────
-        bottom_box = QWidget()
-        b_layout = QVBoxLayout(bottom_box)
-        b_layout.setContentsMargins(4, 2, 4, 4)
-        b_layout.setSpacing(4)
-
-        # ชื่อพนักงานที่สแกน (ว่างไว้เมื่อยังไม่มีคนสแกน)
-        self.name_label = QLabel("")
-        self.name_label.setFont(QFont("Sans", 20, QFont.Bold))
-        self.name_label.setAlignment(Qt.AlignCenter)
-        self.name_label.setWordWrap(True)
-        self.name_label.setMinimumHeight(32)
-        b_layout.addWidget(self.name_label)
-
-        # เวลาบันทึก
-        self.status_detail_label = QLabel("")
-        self.status_detail_label.setFont(QFont("Sans", 13))
-        self.status_detail_label.setAlignment(Qt.AlignCenter)
-        self.status_detail_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-        self.status_detail_label.setMinimumHeight(22)
-        b_layout.addWidget(self.status_detail_label)
-
-        # ปุ่มลงทะเบียนใบหน้า
-        self.enroll_btn = QPushButton("📸 ลงทะเบียนใบหน้า")
-        self.enroll_btn.setFont(QFont("Sans", 12, QFont.Bold))
-        self.enroll_btn.setMinimumHeight(40)
-        self.enroll_btn.setStyleSheet(
-            f"background-color: {ACCENT_BLUE}; color: white; border-radius: 8px; border: none; padding: 4px;"
-        )
-        self.enroll_btn.clicked.connect(self._open_enrollment)
-        b_layout.addWidget(self.enroll_btn)
-
-        layout.addWidget(bottom_box)
+        layout.addWidget(self.cam_label, stretch=1)
 
     def _start_clock(self):
         self._clock_timer = QTimer(self)
@@ -155,10 +197,13 @@ class MainWindow(QMainWindow):
         self.date_label.setText(f"{now.day} {thai_m} {now.year + 543}")
 
     def _start_worker(self):
-        self.worker = RecognitionWorker(self.camera, self.detector, self.db, self.config, self.current_direction)
+        self.worker = RecognitionWorker(
+            self.camera, self.detector, self.db, self.config, self.current_direction
+        )
         self.worker.frame_ready.connect(self._update_frame)
         self.worker.face_recognized.connect(self._on_recognized)
         self.worker.unknown_detected.connect(self._on_unknown)
+        self.worker.spoof_detected.connect(self._on_spoof_detected)
         self.worker.start()
 
     @pyqtSlot(QImage)
@@ -173,7 +218,7 @@ class MainWindow(QMainWindow):
         target_ratio = tw / th
         source_ratio = qw / qh
 
-        # Center-Crop: ตัดส่วนเกินซ้าย-ขวาออก เพื่อให้ได้อัตราส่วนแนวตั้งโดยหน้าไม่ยืด
+        # Center-Crop: ตัดส่วนเกินซ้าย-ขวาออก เพื่อให้ได้อัตราส่วนเต็มจอโดยหน้าไม่ยืด
         if source_ratio > target_ratio:
             crop_w = int(qh * target_ratio)
             crop_h = qh
@@ -191,195 +236,38 @@ class MainWindow(QMainWindow):
         )
         self.cam_label.setPixmap(pix)
 
-    @pyqtSlot(str, float, str)
-    def _on_recognized(self, name, conf, direction):
-        """เมื่อสแกนเจอพนักงาน"""
+    @pyqtSlot(str, float, str, str, str)
+    def _on_recognized(self, name, conf, direction, emp_id, division):
+        """เมื่อสแกนเจอพนักงาน: แสดง Floating Glass Card ตรงกลางจอ"""
         dir_text = "เข้างาน" if direction == "IN" else "ออกงาน"
         now_time = datetime.now().strftime("%H:%M:%S")
 
-        # กรอบกล้องเปลี่ยนเป็นสีเขียว
-        self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {ACCENT_GREEN}; border-radius: 14px;")
+        # ปิดป๊อปอัปเดิมถ้ายังค้างอยู่
+        if self._active_popup:
+            try:
+                self._active_popup.close()
+            except Exception:
+                pass
 
-        self.name_label.setText(f"✅ {name}")
-        self.name_label.setStyleSheet(f"color: {ACCENT_GREEN};")
-
-        self.status_detail_label.setText(f"บันทึก: {dir_text} • เวลา {now_time}")
-        self.status_detail_label.setStyleSheet("color: #ffffff; font-weight: bold;")
-
-        QTimer.singleShot(4000, self._reset_status)
+        # แสดง Floating Glass Card ตรงกลางจอ
+        self._active_popup = AttendanceSuccessPopup(
+            self, name, dir_text, now_time, emp_id=emp_id, division=division
+        )
+        self._active_popup.show()
 
     @pyqtSlot()
     def _on_unknown(self):
-        """เมื่อตรวจจับใบหน้าแล้วไม่พบในระบบ"""
-        if not self.name_label.text():
-            # กรอบกล้องเปลี่ยนเป็นสีแดง
-            self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {ACCENT_RED}; border-radius: 14px;")
+        """เมื่อตรวจจับใบหน้าแล้วไม่พบในระบบ: ไม่แสดงข้อความกวนสายตา"""
+        pass
 
-            self.name_label.setText("❌ ไม่พบข้อมูลใบหน้า")
-            self.name_label.setStyleSheet(f"color: {ACCENT_RED};")
-
-            self.status_detail_label.setText("ไม่พบข้อมูลในระบบ")
-            self.status_detail_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-
-            QTimer.singleShot(3000, self._reset_status)
-
-    def _reset_status(self):
-        """รีเซ็ตกลับสู่สถานะว่างพร้อมรอคนถัดไป (ไม่แสดงพร้อมสแกนใบหน้า)"""
-        self.cam_frame.setStyleSheet(f"background-color: #000; border: 3px solid {BORDER_COLOR}; border-radius: 14px;")
-        self.name_label.setText("")
-        self.status_detail_label.setText("")
-
-    def keyPressEvent(self, event):
-        """กดปุ่ม E บนคีย์บอร์ดเพื่อเปิดหน้าต่างลงทะเบียนใบหน้า (Admin Shortcut)"""
-        if event.key() == Qt.Key_E:
-            self._open_enrollment()
-        else:
-            super().keyPressEvent(event)
-
-    def _open_enrollment(self):
-        self.worker.stop()
-        diag = EnrollmentDialog(self.camera, self.detector, self.db, self.config, self)
-        diag.exec_()
-        self._start_worker()
+    @pyqtSlot()
+    def _on_spoof_detected(self):
+        """เมื่อตรวจพบภาพถ่าย/จอมือถือ: ป้องกันเงียบๆ ไม่แสดงป๊อปอัปแจ้งเตือนกวนสายตา"""
+        pass
 
     def closeEvent(self, event):
         if hasattr(self, 'worker') and self.worker:
             self.worker.stop()
-        event.accept()
-
-
-class EnrollmentDialog(QDialog):
-    """หน้าต่างลงทะเบียนใบหน้า (เปิดผ่าน Shortcut หรือ Admin)"""
-    def __init__(self, camera, detector, database, config, parent=None):
-        super().__init__(parent)
-        self.camera = camera
-        self.detector = detector
-        self.db = database
-        self.config = config
-        self.captured_embeddings = []
-
-        self.setWindowTitle("ลงทะเบียนใบหน้าพนักงานใหม่")
-        self.setStyleSheet(f"background-color: {DARK_BG}; color: {TEXT_PRIMARY};")
-        self.resize(440, 700)
-        self._build_ui()
-
-        self._preview_timer = QTimer(self)
-        self._preview_timer.timeout.connect(self._update_preview)
-        self._preview_timer.start(50)
-
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
-
-        title = QLabel("📸 ลงทะเบียนใบหน้าพนักงานใหม่")
-        title.setFont(QFont("Sans", 15, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-
-        form_frame = QFrame()
-        form_frame.setStyleSheet(f"background-color: {CARD_BG}; border-radius: 8px; padding: 6px;")
-        f_layout = QVBoxLayout(form_frame)
-        f_layout.setSpacing(6)
-
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("ชื่อ-นามสกุล")
-        self.name_input.setStyleSheet("background: #12181f; color: white; padding: 8px; border-radius: 6px; font-size: 13px;")
-        f_layout.addWidget(self.name_input)
-
-        self.emp_id_input = QLineEdit()
-        self.emp_id_input.setPlaceholderText("รหัสพนักงาน (เช่น EMP001)")
-        self.emp_id_input.setStyleSheet("background: #12181f; color: white; padding: 8px; border-radius: 6px; font-size: 13px;")
-        f_layout.addWidget(self.emp_id_input)
-        layout.addWidget(form_frame)
-
-        self.preview_label = QLabel("กำลังโหลดภาพกล้อง...")
-        self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setMinimumSize(400, 280)
-        self.preview_label.setStyleSheet(
-            f"border: 2px dashed {ACCENT_BLUE}; border-radius: 10px; background-color: {CARD_BG};"
-        )
-        layout.addWidget(self.preview_label, stretch=1)
-
-        self.progress_label = QLabel(f"📷 ถ่ายภาพ: 0 / {self.config.min_enroll_images}")
-        self.progress_label.setFont(QFont("Sans", 13, QFont.Bold))
-        self.progress_label.setAlignment(Qt.AlignCenter)
-        self.progress_label.setStyleSheet("color: #fdcb6e;")
-        layout.addWidget(self.progress_label)
-
-        self.capture_btn = QPushButton("📷 กดถ่ายภาพ")
-        self.capture_btn.setFont(QFont("Sans", 13, QFont.Bold))
-        self.capture_btn.setMinimumHeight(48)
-        self.capture_btn.setStyleSheet(f"background-color: {ACCENT_BLUE}; color: white; border-radius: 8px;")
-        self.capture_btn.clicked.connect(self._on_capture)
-        layout.addWidget(self.capture_btn)
-
-        cancel_btn = QPushButton("ยกเลิก")
-        cancel_btn.setMinimumHeight(38)
-        cancel_btn.setStyleSheet("background-color: #636e72; color: white; border-radius: 8px;")
-        cancel_btn.clicked.connect(self.reject)
-        layout.addWidget(cancel_btn)
-
-    def _update_preview(self):
-        frame_rgb = self.camera.capture()
-        if frame_rgb is None:
-            return
-        h, w, ch = frame_rgb.shape
-        qimg = QImage(frame_rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
-        pix = QPixmap.fromImage(qimg).scaled(self.preview_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.preview_label.setPixmap(pix)
-
-    def _on_capture(self):
-        name = self.name_input.text().strip()
-        emp_id = self.emp_id_input.text().strip()
-        if not name or not emp_id:
-            QMessageBox.warning(self, "แจ้งเตือน", "กรุณากรอกชื่อและรหัสพนักงานให้ครบถ้วนก่อนถ่ายภาพ")
-            return
-
-        frame_rgb = self.camera.capture()
-        if frame_rgb is None:
-            return
-
-        faces = self.detector.detect_faces(frame_rgb)
-        if not faces:
-            QMessageBox.warning(self, "ไม่พบใบหน้า", "ไม่พบใบหน้าในกรอบกล้อง กรุณาขยับเข้ามาใกล้ขึ้น")
-            return
-        if len(faces) > 1:
-            QMessageBox.warning(self, "พบหลายใบหน้า", "พบมากกว่า 1 ใบหน้า กรุณายืนเพียงคนเดียว")
-            return
-
-        landmarks = faces[0].get("landmarks", [])
-        if len(landmarks) < 5:
-            QMessageBox.warning(self, "คุณภาพไม่พอ", "ไม่พบ 5 จุดสำคัญบนใบหน้า กรุณาลองใหม่")
-            return
-
-        aligned = align_face(frame_rgb, np.array(landmarks, dtype=np.float32), 112)
-        emb = self.detector.extract_embedding(aligned)
-        self.captured_embeddings.append(emb)
-
-        count = len(self.captured_embeddings)
-        self.progress_label.setText(f"📷 ถ่ายภาพ: {count} / {self.config.min_enroll_images}")
-
-        if count >= self.config.min_enroll_images:
-            self._preview_timer.stop()
-            self.capture_btn.setEnabled(False)
-            self.capture_btn.setText("⏳ กำลังสร้างเวกเตอร์...")
-
-            mean_emb = np.mean(self.captured_embeddings, axis=0)
-            norm = np.linalg.norm(mean_emb)
-            if norm > 0:
-                mean_emb = mean_emb / norm
-
-            try:
-                self.db.register_user(name, emp_id, mean_emb, device_id=self.config.device_id)
-                QMessageBox.information(self, "สำเร็จ", f"ลงทะเบียนพนักงาน '{name}' เรียบร้อยแล้ว!")
-                self.accept()
-            except Exception as e:
-                QMessageBox.critical(self, "ข้อผิดพลาด", f"บันทึกข้อมูลล้มเหลว: {e}")
-                self.reject()
-
-    def closeEvent(self, event):
-        self._preview_timer.stop()
         event.accept()
 
 

@@ -112,9 +112,51 @@ class HailoDetector:
                 logger.warning("Hailo init failed: %s. Using CPU Fallback.", e)
 
         self._backend = "cpu_fallback"
-        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        cascade_path = None
+        if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
+            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        else:
+            candidates = [
+                "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
+                "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml",
+                "/usr/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml",
+            ]
+            for p in candidates:
+                if Path(p).is_file():
+                    cascade_path = p
+                    break
+            if not cascade_path:
+                cascade_path = "haarcascade_frontalface_default.xml"
+
         self._cv_face_cascade = cv2.CascadeClassifier(cascade_path)
-        logger.info("Inference active in CPU Fallback mode")
+        logger.info("Inference active in CPU Fallback mode (Cascade: %s)", cascade_path)
+
+        # Load YuNet Deep Learning Face Detector for CPU Fallback (high accuracy, zero false positives)
+        yunet_path = Path(__file__).resolve().parent / "models" / "face_detection_yunet_2023mar.onnx"
+        self._cpu_yunet = None
+        if yunet_path.is_file() and hasattr(cv2, "FaceDetectorYN"):
+            try:
+                self._cpu_yunet = cv2.FaceDetectorYN.create(
+                    model=str(yunet_path),
+                    config="",
+                    input_size=(640, 480),
+                    score_threshold=0.7,
+                    nms_threshold=0.3,
+                    top_k=5000,
+                )
+                logger.info("⭐ Real YuNet Deep Learning Face Detector loaded for CPU mode (Accurate 5-point landmarks)!")
+            except Exception as e:
+                logger.warning("Could not load YuNet: %s", e)
+
+        # Load real ArcFace ONNX model for CPU face recognition
+        onnx_path = Path(__file__).resolve().parent / "models" / "arcface_mobilefacenet.onnx"
+        self._cpu_arcface_net = None
+        if onnx_path.is_file():
+            try:
+                self._cpu_arcface_net = cv2.dnn.readNetFromONNX(str(onnx_path))
+                logger.info("⭐ Real ArcFace MobileFaceNet ONNX model loaded for CPU recognition!")
+            except Exception as e:
+                logger.warning("Could not load CPU ArcFace ONNX: %s", e)
 
     def detect_faces(self, frame_rgb: np.ndarray) -> list[dict]:
         """Detect faces + 5 landmarks."""
@@ -184,9 +226,34 @@ class HailoDetector:
                 })
             return results
 
-        # CPU Fallback
+        # CPU Fallback: Use YuNet Deep Learning detector if available
+        if getattr(self, "_cpu_yunet", None) is not None:
+            self._cpu_yunet.setInputSize((w, h))
+            frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+            _, detected = self._cpu_yunet.detect(frame_bgr)
+            res = []
+            if detected is not None:
+                for face in detected:
+                    fx, fy, fw, fh = face[0:4]
+                    score = float(face[14])
+                    # Real 5-point landmarks: right eye, left eye, nose, right mouth, left mouth
+                    landmarks = [
+                        [int(face[4]), int(face[5])],
+                        [int(face[6]), int(face[7])],
+                        [int(face[8]), int(face[9])],
+                        [int(face[10]), int(face[11])],
+                        [int(face[12]), int(face[13])],
+                    ]
+                    res.append({
+                        "bbox": [int(fx), int(fy), int(fx + fw), int(fy + fh)],
+                        "score": score,
+                        "landmarks": landmarks,
+                    })
+            return res
+
+        # Fallback to Haar Cascade if YuNet is not present
         gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
-        faces = self._cv_face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(60, 60))
+        faces = self._cv_face_cascade.detectMultiScale(gray, 1.15, 8, minSize=(80, 80))
         res = []
         for (x, y, fw, fh) in faces:
             res.append({
@@ -215,7 +282,26 @@ class HailoDetector:
                     norm = np.linalg.norm(raw)
                     return (raw / norm) if norm > 0 else raw
 
-        # CPU fallback embedding
+        # Real ArcFace ONNX inference on CPU
+        if getattr(self, "_cpu_arcface_net", None) is not None:
+            try:
+                crop_resized = cv2.resize(aligned_crop, (112, 112))
+                blob = cv2.dnn.blobFromImage(
+                    crop_resized,
+                    scalefactor=1.0 / 127.5,
+                    size=(112, 112),
+                    mean=(127.5, 127.5, 127.5),
+                    swapRB=True,
+                )
+                self._cpu_arcface_net.setInput(blob)
+                out = self._cpu_arcface_net.forward()
+                raw = out.flatten().astype(np.float32)
+                norm = np.linalg.norm(raw)
+                return (raw / norm) if norm > 0 else raw
+            except Exception as e:
+                logger.error("ArcFace CPU inference error: %s", e)
+
+        # CPU fallback dummy if model missing
         rng = np.random.default_rng(int(aligned_crop.mean() * 100))
         vec = rng.standard_normal(512).astype(np.float32)
         return vec / np.linalg.norm(vec)

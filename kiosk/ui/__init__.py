@@ -1,3 +1,3 @@
-from .app import create_app, MainWindow, EnrollmentDialog
+from .app import create_app, MainWindow
 
-__all__ = ["create_app", "MainWindow", "EnrollmentDialog"]
+__all__ = ["create_app", "MainWindow"]

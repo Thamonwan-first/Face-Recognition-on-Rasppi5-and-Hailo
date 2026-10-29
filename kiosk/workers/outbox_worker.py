@@ -4,6 +4,7 @@ Implements batching, thread-isolated SQLite connection, and exponential backoff.
 """
 import time
 import json
+import base64
 import logging
 import threading
 import sqlite3
@@ -78,20 +79,50 @@ class OutboxWorker:
             except Exception as e:
                 logger.warning("Invalid JSON in outbox id %s: %s", r["id"], e)
 
-        if not events:
-            return
-
-        url = f"{self.config.server_url.rstrip('/')}/sync/events"
         headers = {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
 
-        try:
-            res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=False)
-            if res.status_code == 200:
-                cur.execute(
-                    f"UPDATE outbox SET synced = 1 WHERE id IN ({','.join(['?']*len(valid_row_ids))})",
-                    valid_row_ids
-                )
-                conn.commit()
-                logger.info("Successfully synced %d events to server", len(events))
-        except Exception as e:
-            logger.debug("Server sync unreachable: %s", e)
+        # 1. Sync Attendance Events
+        if events:
+            url = f"{self.config.server_url.rstrip('/')}/sync/events"
+            try:
+                res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=False)
+                if res.status_code == 200:
+                    cur.execute(
+                        f"UPDATE outbox SET synced = 1 WHERE id IN ({','.join(['?']*len(valid_row_ids))})",
+                        valid_row_ids
+                    )
+                    conn.commit()
+                    logger.info("Successfully synced %d events to server", len(events))
+            except Exception as e:
+                logger.debug("Server sync unreachable: %s", e)
+
+        # 2. Sync Kiosk User Enrollments to Server
+        cur.execute(
+            "SELECT id, payload FROM outbox WHERE synced = 0 AND type = 'user_enrollment' ORDER BY created_at ASC LIMIT 10"
+        )
+        enroll_rows = cur.fetchall()
+        for er in enroll_rows:
+            try:
+                row_id = er["id"] if hasattr(er, "keys") else er[0]
+                payload_raw = er["payload"] if hasattr(er, "keys") else er[1]
+                p = json.loads(payload_raw) if payload_raw else {}
+                if not p.get("user_id"):
+                    continue
+
+                # If embedding_b64 is missing in payload, fetch from local user_embeddings table
+                if not p.get("embedding_b64"):
+                    cur.execute("SELECT embedding FROM user_embeddings WHERE user_id = ?", (p["user_id"],))
+                    emb_row = cur.fetchone()
+                    if emb_row:
+                        raw_bytes = emb_row["embedding"] if hasattr(emb_row, "keys") else emb_row[0]
+                        if raw_bytes:
+                            p["embedding_b64"] = base64.b64encode(raw_bytes).decode("utf-8")
+
+                enroll_url = f"{self.config.server_url.rstrip('/')}/sync/enrollment"
+                res = requests.post(enroll_url, json=p, headers=headers, timeout=5, verify=False)
+                if res.status_code == 200:
+                    cur.execute("UPDATE outbox SET synced = 1 WHERE id = ?", (row_id,))
+                    conn.commit()
+                    logger.info("Successfully synced Kiosk enrollment to server: %s (%s)", p.get("name"), p.get("user_id"))
+            except Exception as e:
+                logger.debug("Enrollment sync error: %s", e)

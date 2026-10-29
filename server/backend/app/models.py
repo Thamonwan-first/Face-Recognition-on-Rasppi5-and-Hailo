@@ -50,8 +50,11 @@ class User(Base):
 
     id = Column(String, primary_key=True)               # UUID
     employee_id = Column(String, unique=True, nullable=True)
-    name = Column(String, nullable=False)
-    department = Column(String, nullable=True)
+    title = Column(String, nullable=True)               # คำนำหน้า (นาย, นาง, ดร., ฯลฯ)
+    first_name = Column(String, nullable=True)          # ชื่อ
+    last_name = Column(String, nullable=True)           # นามสกุล
+    name = Column(String, nullable=False)               # ชื่อเต็ม
+    department = Column(String, nullable=True)          # ฝ่าย (Division)
     status = Column(String, default="active")           # active | inactive
     version = Column(Integer, default=1)                 # Incremented on updates
     deleted_at = Column(DateTime, nullable=True)        # Soft delete

@@ -2,12 +2,14 @@
 Audit Log inquiry API.
 """
 from typing import Optional
+from datetime import timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import AuditLog, Admin
 from ..security import get_current_admin
+from ..utils import format_utc_iso
 
 router = APIRouter(prefix="/api/audit", tags=["Audit"])
 
@@ -34,7 +36,7 @@ def list_audit_logs(
             "target_type": l.target_type,
             "target_id": l.target_id,
             "detail": l.detail,
-            "created_at": l.created_at.isoformat() if l.created_at else None,
+            "created_at": format_utc_iso(l.created_at),
         }
         for (l, adm_user) in logs
     ]

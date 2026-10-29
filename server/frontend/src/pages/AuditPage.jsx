@@ -2,6 +2,12 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 
+function formatThaiDateTime(dateStr) {
+  if (!dateStr) return '-';
+  const utcStr = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`;
+  return new Date(utcStr).toLocaleString('th-TH');
+}
+
 export default function AuditPage() {
   const { data: logs, isLoading, error } = useQuery({
     queryKey: ['audit_logs'],
@@ -32,7 +38,7 @@ export default function AuditPage() {
           <tbody>
             {logs?.map((l) => (
               <tr key={l.id}>
-                <td>{new Date(l.created_at).toLocaleString('th-TH')}</td>
+                <td>{formatThaiDateTime(l.created_at)}</td>
                 <td>{l.admin_username || l.admin_id || 'System'}</td>
                 <td>
                   <strong>{l.action}</strong>

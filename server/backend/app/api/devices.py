@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Device, DeviceState, Admin
-from ..security import get_current_admin, hash_password, record_audit
+from ..security import get_current_admin
+from ..utils import format_utc_iso
 
 router = APIRouter(prefix="/api/devices", tags=["Devices"])
 
@@ -34,7 +35,7 @@ def list_devices_status(admin: Admin = Depends(get_current_admin), db: Session =
             computed_status = "revoked"
         elif d.last_seen:
             last_seen_aware = d.last_seen if d.last_seen.tzinfo else d.last_seen.replace(tzinfo=timezone.utc)
-            if (now - last_seen_aware).total_seconds() <= 180:
+            if (now - last_seen_aware).total_seconds() <= 30:
                 computed_status = "online"
 
         state = d.state
@@ -44,8 +45,8 @@ def list_devices_status(admin: Admin = Depends(get_current_admin), db: Session =
             "location": d.location,
             "direction": d.direction,
             "status": computed_status,
-            "last_seen": d.last_seen.isoformat() if d.last_seen else None,
-            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "last_seen": format_utc_iso(d.last_seen),
+            "created_at": format_utc_iso(d.created_at),
             "applied_version": state.applied_version if state else 0,
             "cpu_temp": state.cpu_temp if state else None,
             "fps": state.fps if state else None,
