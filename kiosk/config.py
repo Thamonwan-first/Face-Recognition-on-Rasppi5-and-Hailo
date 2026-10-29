@@ -51,6 +51,17 @@ class KioskConfig:
             return self.ca_cert
         return False
 
+    def get_headers(self, json_content: bool = True) -> dict:
+        """Centralized HTTP headers for Kiosk-to-Server requests."""
+        headers = {"X-API-Key": self.api_key}
+        if json_content:
+            headers["Content-Type"] = "application/json"
+        return headers
+
+    def get_url(self, endpoint: str) -> str:
+        """Safely format server URL for an endpoint."""
+        return f"{self.server_url.rstrip('/')}/{endpoint.lstrip('/')}"
+
     recognition_threshold: float = float(_RAW.get("recognition", {}).get("threshold", 0.55))
     debounce_seconds: int = int(_RAW.get("recognition", {}).get("debounce_seconds", 30))
     min_enroll_images: int = int(_RAW.get("recognition", {}).get("min_enroll_images", 3))

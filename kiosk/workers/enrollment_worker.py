@@ -50,8 +50,8 @@ class EnrollmentWorker:
                 time.sleep(0.5)
 
     def _check_and_process_job(self):
-        claim_url = f"{self.config.server_url.rstrip('/')}/sync/enrollment/claim"
-        headers = {"X-API-Key": self.config.api_key}
+        claim_url = self.config.get_url("/sync/enrollment/claim") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/enrollment/claim"
+        headers = self.config.get_headers(json_content=False) if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key}
 
         try:
             resp = requests.get(claim_url, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
@@ -124,12 +124,13 @@ class EnrollmentWorker:
             emb_b64 = base64.b64encode(emb_bytes).decode("utf-8")
 
             # Submit result to Server
-            result_url = f"{self.config.server_url.rstrip('/')}/api/enrollment/{job_id}/result"
+            result_url = self.config.get_url(f"/api/enrollment/{job_id}/result") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/api/enrollment/{job_id}/result"
+            post_headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
             payload = {
                 "embedding_b64": emb_b64,
                 "quality_score": 1.0,
             }
-            res_post = requests.post(result_url, json=payload, headers={"X-API-Key": self.config.api_key}, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
+            res_post = requests.post(result_url, json=payload, headers=post_headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
             if res_post.status_code == 200:
                 logger.info("Successfully completed enrollment job %s from %d image(s)! Embedding stored on server.", job_id, len(captured_embeddings))
                 if self.on_enrollment_done:

@@ -61,8 +61,8 @@ class HeartbeatWorker:
                 time.sleep(0.5)
 
     def _send_heartbeat(self):
-        url = f"{self.config.server_url.rstrip('/')}/sync/heartbeat"
-        headers = {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
+        url = self.config.get_url("/sync/heartbeat") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/heartbeat"
+        headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
 
         conn = self._get_connection()
         # Get latest sync version

@@ -79,12 +79,11 @@ class OutboxWorker:
             except Exception as e:
                 logger.warning("Invalid JSON in outbox id %s: %s", r["id"], e)
 
-        headers = {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
-
+        headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
         ssl_verify = getattr(self.config, "ssl_verify", False)
         # 1. Sync Attendance Events
         if events:
-            url = f"{self.config.server_url.rstrip('/')}/sync/events"
+            url = self.config.get_url("/sync/events") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/events"
             try:
                 res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=ssl_verify)
                 if res.status_code == 200:
@@ -123,7 +122,7 @@ class OutboxWorker:
                         if raw_bytes:
                             p["embedding_b64"] = base64.b64encode(raw_bytes).decode("utf-8")
 
-                enroll_url = f"{self.config.server_url.rstrip('/')}/sync/enrollment"
+                enroll_url = self.config.get_url("/sync/enrollment") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/enrollment"
                 res = requests.post(enroll_url, json=p, headers=headers, timeout=5, verify=ssl_verify)
                 if res.status_code == 200:
                     cur.execute("UPDATE outbox SET synced = 1 WHERE id = ?", (row_id,))

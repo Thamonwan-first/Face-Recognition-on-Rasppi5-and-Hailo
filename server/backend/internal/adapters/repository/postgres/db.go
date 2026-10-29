@@ -9,28 +9,20 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+func getEnv(key, fallback string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return fallback
+}
+
 func NewPostgresDB(databaseURL string) (*sql.DB, error) {
 	if databaseURL == "" {
-		host := os.Getenv("DB_HOST")
-		if host == "" {
-			host = "localhost"
-		}
-		port := os.Getenv("DB_PORT")
-		if port == "" {
-			port = "5432"
-		}
-		user := os.Getenv("DB_USER")
-		if user == "" {
-			user = "attendance_app"
-		}
-		pass := os.Getenv("DB_PASSWORD")
-		if pass == "" {
-			pass = "changeme"
-		}
-		dbName := os.Getenv("DB_NAME")
-		if dbName == "" {
-			dbName = "attendance"
-		}
+		host := getEnv("DB_HOST", "localhost")
+		port := getEnv("DB_PORT", "5432")
+		user := getEnv("DB_USER", "attendance_app")
+		pass := getEnv("DB_PASSWORD", "changeme")
+		dbName := getEnv("DB_NAME", "attendance")
 		databaseURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, pass, host, port, dbName)
 	}
 

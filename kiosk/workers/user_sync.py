@@ -66,8 +66,8 @@ class UserSyncWorker:
 
     def _pull_user_updates(self):
         last_v = self._get_last_version()
-        url = f"{self.config.server_url.rstrip('/')}/sync/users?since={last_v}"
-        headers = {"X-API-Key": self.config.api_key}
+        url = self.config.get_url(f"/sync/users?since={last_v}") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/users?since={last_v}"
+        headers = self.config.get_headers(json_content=False) if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key}
 
         try:
             res = requests.get(url, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
