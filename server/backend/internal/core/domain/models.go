@@ -33,6 +33,11 @@ type Device struct {
 	CreatedAt  time.Time    `json:"created_at"`
 	RevokedAt  *time.Time   `json:"revoked_at"`
 	State      *DeviceState `json:"state,omitempty"`
+
+	// Flattened fields for UI compatibility
+	CPUTemp       *float64 `json:"cpu_temp,omitempty"`
+	FPS           *float64 `json:"fps,omitempty"`
+	OutboxPending int      `json:"outbox_pending"`
 }
 
 type DeviceState struct {

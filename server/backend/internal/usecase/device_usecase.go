@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"attendance-backend/internal/core/domain"
@@ -37,7 +39,36 @@ type RegisterDeviceResponse struct {
 }
 
 func (uc *DeviceUseCase) List(ctx context.Context) ([]*domain.Device, error) {
-	return uc.deviceRepo.List(ctx)
+	devices, err := uc.deviceRepo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	threshold := 60 * time.Second
+	if secStr := os.Getenv("DEVICE_OFFLINE_THRESHOLD_SECONDS"); secStr != "" {
+		if sec, err := strconv.Atoi(secStr); err == nil && sec > 0 {
+			threshold = time.Duration(sec) * time.Second
+		}
+	}
+
+	now := time.Now().UTC()
+	for _, d := range devices {
+		if d.RevokedAt != nil {
+			d.Status = "revoked"
+		} else if d.LastSeen != nil && now.Sub(d.LastSeen.UTC()) <= threshold {
+			d.Status = "online"
+		} else {
+			d.Status = "offline"
+		}
+
+		if d.State != nil {
+			d.CPUTemp = d.State.CPUTemp
+			d.FPS = d.State.FPS
+			d.OutboxPending = d.State.OutboxPending
+		}
+	}
+
+	return devices, nil
 }
 
 func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *DeviceDTO) (*RegisterDeviceResponse, error) {
