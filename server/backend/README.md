@@ -6,9 +6,7 @@ Written in Go with pure **Clean Architecture / Ports & Adapters (Hexagonal)** pa
 
 ```
 server/backend/
-├── cmd/
-│   └── server/
-│       └── main.go                 # Composition Root (Dependency Injection)
+├── main.go                     # Composition Root (Dependency Injection)
 ├── internal/
 │   ├── core/
 │   │   ├── domain/                 # Core Business Entities (POJO / No ORM)
@@ -48,12 +46,14 @@ server/backend/
 
 ### Run directly
 ```bash
-go run cmd/server/main.go
+go run main.go
+# or
+go run .
 ```
 
 ### Build Binary
 ```bash
-go build -o bin/server cmd/server/main.go
+go build -o bin/server main.go
 ./bin/server
 ```
 
