@@ -8,6 +8,7 @@ import UsersPage from './pages/UsersPage';
 import EnrollmentPage from './pages/EnrollmentPage';
 import AttendancePage from './pages/AttendancePage';
 import AuditPage from './pages/AuditPage';
+import AdminsPage from './pages/AdminsPage';
 
 function DashboardLayout() {
   return (
@@ -21,6 +22,7 @@ function DashboardLayout() {
           <Route path="/enrollment" element={<EnrollmentPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/audit" element={<AuditPage />} />
+          <Route path="/admins" element={<AdminsPage />} />
           <Route path="*" element={<Navigate to="/devices" replace />} />
         </Routes>
       </main>

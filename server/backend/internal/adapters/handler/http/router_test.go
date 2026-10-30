@@ -35,12 +35,36 @@ func (m *mockAdminRepo) GetByID(ctx context.Context, id string) (*entity.Admin, 
 	return nil, entity.ErrNotFound
 }
 
+func (m *mockAdminRepo) List(ctx context.Context) ([]*entity.Admin, error) {
+	if m.admin != nil {
+		return []*entity.Admin{m.admin}, nil
+	}
+	return []*entity.Admin{}, nil
+}
+
 func (m *mockAdminRepo) Create(ctx context.Context, admin *entity.Admin) error {
 	m.admin = admin
 	return nil
 }
 
+func (m *mockAdminRepo) Update(ctx context.Context, admin *entity.Admin) error {
+	m.admin = admin
+	return nil
+}
+
+func (m *mockAdminRepo) UpdatePassword(ctx context.Context, id string, passwordHash string) error {
+	if m.admin != nil {
+		m.admin.PasswordHash = passwordHash
+	}
+	return nil
+}
+
 func (m *mockAdminRepo) UpdateLastLogin(ctx context.Context, id string, lastLogin time.Time) error {
+	return nil
+}
+
+func (m *mockAdminRepo) Delete(ctx context.Context, id string) error {
+	m.admin = nil
 	return nil
 }
 

@@ -40,6 +40,39 @@ func AuthMiddleware(tokenMaker *token.TokenMaker) gin.HandlerFunc {
 	}
 }
 
+func RequirePermission(perms ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claimsVal, exists := c.Get(ContextAdminKey)
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		claims := claimsVal.(*token.Claims)
+
+		// Super Admin passes all
+		if claims.Role == "admin" {
+			c.Next()
+			return
+		}
+
+		// Check if user has '*' or any of the required permissions
+		for _, userPerm := range claims.Permissions {
+			if userPerm == "*" {
+				c.Next()
+				return
+			}
+			for _, requiredPerm := range perms {
+				if userPerm == requiredPerm {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงส่วนนี้"})
+	}
+}
+
 func DeviceAuthMiddleware(deviceUC *usecase.DeviceUseCase) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("X-API-Key")

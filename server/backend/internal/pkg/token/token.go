@@ -12,9 +12,10 @@ var (
 )
 
 type Claims struct {
-	AdminID  string `json:"admin_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	AdminID     string   `json:"admin_id"`
+	Username    string   `json:"username"`
+	Role        string   `json:"role"`
+	Permissions []string `json:"permissions"`
 	jwt.RegisteredClaims
 }
 
@@ -29,12 +30,13 @@ func NewTokenMaker(secretKey string) *TokenMaker {
 	return &TokenMaker{secretKey: []byte(secretKey)}
 }
 
-func (m *TokenMaker) CreateToken(adminID, username, role string, duration time.Duration) (string, error) {
+func (m *TokenMaker) CreateToken(adminID, username, role string, permissions []string, duration time.Duration) (string, error) {
 	now := time.Now().UTC()
 	claims := Claims{
-		AdminID:  adminID,
-		Username: username,
-		Role:     role,
+		AdminID:     adminID,
+		Username:    username,
+		Role:        role,
+		Permissions: permissions,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(duration)),

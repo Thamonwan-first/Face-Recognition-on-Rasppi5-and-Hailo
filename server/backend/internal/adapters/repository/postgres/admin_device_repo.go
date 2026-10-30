@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"attendance-backend/internal/entity"
@@ -17,11 +18,11 @@ func NewAdminRepository(db *sql.DB) ports.AdminRepository {
 	return &adminRepo{db: db}
 }
 
-func (r *adminRepo) GetByUsername(ctx context.Context, username string) (*entity.Admin, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, username, password_hash, role, created_at, last_login FROM admins WHERE username = $1", username)
+func scanAdmin(row rowScanner) (*entity.Admin, error) {
 	var a entity.Admin
 	var lastLogin sql.NullTime
-	if err := row.Scan(&a.ID, &a.Username, &a.PasswordHash, &a.Role, &a.CreatedAt, &lastLogin); err != nil {
+	var permsStr sql.NullString
+	if err := row.Scan(&a.ID, &a.Username, &a.PasswordHash, &a.Role, &permsStr, &a.CreatedAt, &lastLogin); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, entity.ErrNotFound
 		}
@@ -30,33 +31,69 @@ func (r *adminRepo) GetByUsername(ctx context.Context, username string) (*entity
 	if lastLogin.Valid {
 		a.LastLogin = &lastLogin.Time
 	}
+	if permsStr.Valid && permsStr.String != "" {
+		_ = json.Unmarshal([]byte(permsStr.String), &a.Permissions)
+	}
+	if a.Permissions == nil {
+		a.Permissions = []string{}
+	}
 	return &a, nil
+}
+
+func (r *adminRepo) GetByUsername(ctx context.Context, username string) (*entity.Admin, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT id, username, password_hash, role, permissions, created_at, last_login FROM admins WHERE username = $1", username)
+	return scanAdmin(row)
 }
 
 func (r *adminRepo) GetByID(ctx context.Context, id string) (*entity.Admin, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, username, password_hash, role, created_at, last_login FROM admins WHERE id = $1", id)
-	var a entity.Admin
-	var lastLogin sql.NullTime
-	if err := row.Scan(&a.ID, &a.Username, &a.PasswordHash, &a.Role, &a.CreatedAt, &lastLogin); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, entity.ErrNotFound
-		}
+	row := r.db.QueryRowContext(ctx, "SELECT id, username, password_hash, role, permissions, created_at, last_login FROM admins WHERE id = $1", id)
+	return scanAdmin(row)
+}
+
+func (r *adminRepo) List(ctx context.Context) ([]*entity.Admin, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id, username, password_hash, role, permissions, created_at, last_login FROM admins ORDER BY created_at ASC")
+	if err != nil {
 		return nil, err
 	}
-	if lastLogin.Valid {
-		a.LastLogin = &lastLogin.Time
+	defer rows.Close()
+
+	var admins []*entity.Admin
+	for rows.Next() {
+		a, err := scanAdmin(rows)
+		if err != nil {
+			return nil, err
+		}
+		admins = append(admins, a)
 	}
-	return &a, nil
+	return admins, nil
 }
 
 func (r *adminRepo) Create(ctx context.Context, admin *entity.Admin) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO admins (id, username, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5)",
-		admin.ID, admin.Username, admin.PasswordHash, admin.Role, admin.CreatedAt)
+	permsBytes, _ := json.Marshal(admin.Permissions)
+	_, err := r.db.ExecContext(ctx, "INSERT INTO admins (id, username, password_hash, role, permissions, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+		admin.ID, admin.Username, admin.PasswordHash, admin.Role, string(permsBytes), admin.CreatedAt)
+	return err
+}
+
+func (r *adminRepo) Update(ctx context.Context, admin *entity.Admin) error {
+	permsBytes, _ := json.Marshal(admin.Permissions)
+	_, err := r.db.ExecContext(ctx, "UPDATE admins SET role = $1, permissions = $2 WHERE id = $3",
+		admin.Role, string(permsBytes), admin.ID)
+	return err
+}
+
+func (r *adminRepo) UpdatePassword(ctx context.Context, id string, passwordHash string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE admins SET password_hash = $1 WHERE id = $2", passwordHash, id)
 	return err
 }
 
 func (r *adminRepo) UpdateLastLogin(ctx context.Context, id string, lastLogin time.Time) error {
 	_, err := r.db.ExecContext(ctx, "UPDATE admins SET last_login = $1 WHERE id = $2", lastLogin, id)
+	return err
+}
+
+func (r *adminRepo) Delete(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM admins WHERE id = $1", id)
 	return err
 }
 

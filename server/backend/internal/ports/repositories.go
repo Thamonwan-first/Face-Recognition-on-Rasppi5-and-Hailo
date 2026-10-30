@@ -10,8 +10,12 @@ import (
 type AdminRepository interface {
 	GetByUsername(ctx context.Context, username string) (*entity.Admin, error)
 	GetByID(ctx context.Context, id string) (*entity.Admin, error)
+	List(ctx context.Context) ([]*entity.Admin, error)
 	Create(ctx context.Context, admin *entity.Admin) error
+	Update(ctx context.Context, admin *entity.Admin) error
+	UpdatePassword(ctx context.Context, id string, passwordHash string) error
 	UpdateLastLogin(ctx context.Context, id string, lastLogin time.Time) error
+	Delete(ctx context.Context, id string) error
 }
 
 type DeviceRepository interface {

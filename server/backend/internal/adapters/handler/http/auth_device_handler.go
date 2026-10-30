@@ -54,6 +54,76 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, admin)
 }
 
+func (h *AuthHandler) ListAdmins(c *gin.Context) {
+	admins, err := h.authUC.ListAdmins(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, admins)
+}
+
+func (h *AuthHandler) CreateAdmin(c *gin.Context) {
+	var dto usecase.CreateAdminDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	claims := c.MustGet(ContextAdminKey).(*token.Claims)
+	newAdmin, err := h.authUC.CreateAdmin(c.Request.Context(), claims.AdminID, &dto)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, newAdmin)
+}
+
+func (h *AuthHandler) UpdateAdmin(c *gin.Context) {
+	id := c.Param("id")
+	var dto usecase.UpdateAdminDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	claims := c.MustGet(ContextAdminKey).(*token.Claims)
+	admin, err := h.authUC.UpdateAdmin(c.Request.Context(), claims.AdminID, id, &dto)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, admin)
+}
+
+func (h *AuthHandler) DeleteAdmin(c *gin.Context) {
+	id := c.Param("id")
+	claims := c.MustGet(ContextAdminKey).(*token.Claims)
+	if err := h.authUC.DeleteAdmin(c.Request.Context(), claims.AdminID, id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var dto usecase.ChangePasswordDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	claims := c.MustGet(ContextAdminKey).(*token.Claims)
+	if err := h.authUC.ChangePassword(c.Request.Context(), claims.AdminID, dto.OldPassword, dto.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "เปลี่ยนรหัสผ่านสำเร็จ"})
+}
+
 // ---------------- Device Handler ----------------
 
 type DeviceHandler struct {

@@ -53,9 +53,13 @@ func createSchema(db *sql.DB) error {
 		username VARCHAR(128) UNIQUE NOT NULL,
 		password_hash VARCHAR(255) NOT NULL,
 		role VARCHAR(32) DEFAULT 'admin',
+		permissions TEXT DEFAULT '["*"]',
 		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
 		last_login TIMESTAMPTZ
 	);
+
+	-- Migration: ensure permissions column exists on admins table
+	ALTER TABLE admins ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT '["*"]';
 
 	CREATE TABLE IF NOT EXISTS devices (
 		id VARCHAR(64) PRIMARY KEY,
@@ -186,9 +190,12 @@ func seedDefaults(db *sql.DB) error {
 		}
 		hash, _ := hasher.HashPassword(defaultPass)
 		_, _ = db.Exec(
-			"INSERT INTO admins (id, username, password_hash, role, created_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)",
-			"admin-default-uuid", "admin", hash, "admin",
+			"INSERT INTO admins (id, username, password_hash, role, permissions, created_at) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)",
+			"admin-default-uuid", "admin", hash, "admin", `["*"]`,
 		)
+	} else {
+		// Ensure default admin has full permissions
+		_, _ = db.Exec("UPDATE admins SET permissions = '[\"*\"]' WHERE username = 'admin' AND (permissions IS NULL OR permissions = '' OR permissions = '[]')")
 	}
 
 	// 2. Seed Default Kiosk (only if initial development mode or key provided)

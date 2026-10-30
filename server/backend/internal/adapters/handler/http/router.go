@@ -49,23 +49,24 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 	adminAuth := AuthMiddleware(tokenMaker)
 	api := r.Group("/api")
 	{
-		// Auth profile
+		// Auth profile & password change
 		api.GET("/auth/me", adminAuth, handlers.Auth.Me)
+		api.POST("/auth/change-password", adminAuth, handlers.Auth.ChangePassword)
 
 		// Users
 		users := api.Group("/users")
 		users.Use(adminAuth)
 		{
-			users.GET("", handlers.User.List)
-			users.POST("", handlers.User.Create)
-			users.GET("/:id", handlers.User.Get)
-			users.PUT("/:id", handlers.User.Update)
-			users.DELETE("/:id", handlers.User.Delete)
+			users.GET("", RequirePermission("users", "enrollment"), handlers.User.List)
+			users.POST("", RequirePermission("users"), handlers.User.Create)
+			users.GET("/:id", RequirePermission("users", "enrollment"), handlers.User.Get)
+			users.PUT("/:id", RequirePermission("users"), handlers.User.Update)
+			users.DELETE("/:id", RequirePermission("users"), handlers.User.Delete)
 		}
 
 		// Attendance
 		attendance := api.Group("/attendance")
-		attendance.Use(adminAuth)
+		attendance.Use(adminAuth, RequirePermission("attendance"))
 		{
 			attendance.GET("/pairs", handlers.Attendance.ListPairs)
 			attendance.GET("/summary", handlers.Attendance.ListPairs)
@@ -74,7 +75,7 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 
 		// Devices
 		devices := api.Group("/devices")
-		devices.Use(adminAuth)
+		devices.Use(adminAuth, RequirePermission("devices"))
 		{
 			devices.GET("", handlers.Device.List)
 			devices.GET("/status", handlers.Device.List)
@@ -84,7 +85,7 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 
 		// Enrollment (Dashboard admin upload)
 		enrollment := api.Group("/enrollment")
-		enrollment.Use(adminAuth)
+		enrollment.Use(adminAuth, RequirePermission("enrollment"))
 		{
 			enrollment.GET("/pending", handlers.Enrollment.Pending)
 			enrollment.POST("", handlers.Enrollment.Create)
@@ -92,9 +93,19 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 
 		// Audit Log
 		audit := api.Group("/audit")
-		audit.Use(adminAuth)
+		audit.Use(adminAuth, RequirePermission("audit"))
 		{
 			audit.GET("", handlers.Audit.List)
+		}
+
+		// Admins (Dashboard Accounts Management)
+		admins := api.Group("/admins")
+		admins.Use(adminAuth, RequirePermission("admins"))
+		{
+			admins.GET("", handlers.Auth.ListAdmins)
+			admins.POST("", handlers.Auth.CreateAdmin)
+			admins.PUT("/:id", handlers.Auth.UpdateAdmin)
+			admins.DELETE("/:id", handlers.Auth.DeleteAdmin)
 		}
 	}
 
