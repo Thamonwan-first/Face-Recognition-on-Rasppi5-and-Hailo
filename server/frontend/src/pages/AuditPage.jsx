@@ -12,7 +12,7 @@ export default function AuditPage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">📝 บันทึกประวัติการกระทำ (Audit Log)</h1>
+        <h1 className="page-title">บันทึกประวัติการใช้งาน</h1>
       </div>
 
       {isLoading && <p>กำลังโหลดบันทึกการกระทำ...</p>}
@@ -23,11 +23,11 @@ export default function AuditPage() {
           <thead>
             <tr>
               <th>เวลาที่บันทึก</th>
-              <th>ผู้ดำเนินการ (Admin)</th>
-              <th>คำสั่ง / กิจกรรม (Action)</th>
+              <th>ผู้ดำเนินการ</th>
+              <th>กิจกรรม</th>
               <th>ประเภทเป้าหมาย</th>
               <th>รหัสเป้าหมาย</th>
-              <th>รายละเอียด (Snapshot)</th>
+              <th>รายละเอียด</th>
             </tr>
           </thead>
           <tbody>

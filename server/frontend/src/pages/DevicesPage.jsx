@@ -14,7 +14,7 @@ export default function DevicesPage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">🖥️ รายการอุปกรณ์ (Devices)</h1>
+        <h1 className="page-title">รายการอุปกรณ์</h1>
       </div>
 
       {isLoading && <p>กำลังโหลดข้อมูลอุปกรณ์...</p>}
@@ -34,10 +34,10 @@ export default function DevicesPage() {
             </div>
 
             <ul className="card-details">
-              <li>🌡️ อุณหภูมิ CPU: {device.cpu_temp != null ? `${device.cpu_temp}°C` : '-'}</li>
-              <li>🎯 FPS กล้อง: {device.fps != null ? `${device.fps}` : '-'}</li>
+              <li>อุณหภูมิ CPU: {device.cpu_temp != null ? `${device.cpu_temp}°C` : '-'}</li>
+              <li>อัตราเฟรมเรตกล้อง: {device.fps != null ? `${device.fps} FPS` : '-'}</li>
               <li>
-                ⏰ ออนไลน์ล่าสุด:{' '}
+                ออนไลน์ล่าสุด:{' '}
                 {formatThaiDateTime(device.last_seen, 'ไม่เคย')}
               </li>
             </ul>

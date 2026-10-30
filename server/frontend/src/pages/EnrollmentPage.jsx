@@ -68,7 +68,7 @@ export default function EnrollmentPage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">📸 ลงทะเบียนใบหน้าผ่านแดชบอร์ด (Web Enrollment)</h1>
+        <h1 className="page-title">ลงทะเบียนใบหน้าผ่านแดชบอร์ด</h1>
       </div>
 
       <div style={{ background: '#fff', padding: '1.5rem', borderRadius: '8px', marginBottom: '2rem', maxWidth: '600px' }}>
@@ -95,7 +95,7 @@ export default function EnrollmentPage() {
             </select>
             {users?.length === 0 && (
               <p style={{ fontSize: '0.85rem', color: 'var(--success)', marginTop: '0.4rem', fontWeight: 'bold' }}>
-                🎉 พนักงานทุกคนในระบบลงทะเบียนใบหน้าครบเรียบร้อยแล้ว
+                พนักงานทุกคนในระบบลงทะเบียนใบหน้าครบเรียบร้อยแล้ว
               </p>
             )}
           </div>
@@ -111,7 +111,7 @@ export default function EnrollmentPage() {
             />
             {imageFiles.length > 0 && (
               <p style={{ fontSize: '0.85rem', color: 'var(--primary)', marginTop: '0.4rem', fontWeight: 'bold' }}>
-                📷 เลือกแล้ว {imageFiles.length} รูป จากสูงสุด 5 รูป
+                เลือกแล้ว {imageFiles.length} รูป จากสูงสุด 5 รูป
               </p>
             )}
           </div>
@@ -126,7 +126,7 @@ export default function EnrollmentPage() {
         </form>
       </div>
 
-      <h3 style={{ marginBottom: '1rem' }}>สถานะคิวงานประมวลผล (Enrollment Jobs Queue)</h3>
+      <h3 style={{ marginBottom: '1rem' }}>สถานะคิวงานประมวลผล</h3>
       <div className="table-container">
         <table className="data-table">
           <thead>

@@ -21,24 +21,24 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <h2>📋 Face Attendance</h2>
+        <h2>ระบบบันทึกเวลาทำงาน</h2>
       </div>
 
       <ul className="sidebar-nav">
         <li>
-          <NavLink to="/devices">🖥️ อุปกรณ์ (Devices)</NavLink>
+          <NavLink to="/devices">รายการอุปกรณ์</NavLink>
         </li>
         <li>
-          <NavLink to="/users">👤 ข้อมูลพนักงาน (Users)</NavLink>
+          <NavLink to="/users">ข้อมูลพนักงาน</NavLink>
         </li>
         <li>
-          <NavLink to="/enrollment">⚡ คิวลงทะเบียนใบหน้า (Enrollment)</NavLink>
+          <NavLink to="/enrollment">คิวลงทะเบียนใบหน้า</NavLink>
         </li>
         <li>
-          <NavLink to="/attendance">📅 ประวัติลงเวลา (Attendance)</NavLink>
+          <NavLink to="/attendance">ประวัติการลงเวลา</NavLink>
         </li>
         <li>
-          <NavLink to="/audit">📝 บันทึกประวัติ (Audit Log)</NavLink>
+          <NavLink to="/audit">บันทึกประวัติการใช้งาน</NavLink>
         </li>
       </ul>
 
@@ -97,13 +97,13 @@ export default function Sidebar() {
                 gap: '0.25rem',
               }}
             >
-              <span>{currentUser.role === 'admin' ? '🛡️ ผู้ดูแลระบบ (Admin)' : '👁️ ผู้ใช้งานทั่วไป (Viewer)'}</span>
+              <span>{currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งานทั่วไป'}</span>
             </div>
           </div>
         </div>
 
         <button onClick={handleLogout} className="btn-logout">
-          🚪 ออกจากระบบ
+          ออกจากระบบ
         </button>
       </div>
     </aside>

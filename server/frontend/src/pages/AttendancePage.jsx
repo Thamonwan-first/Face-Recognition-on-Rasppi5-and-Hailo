@@ -37,8 +37,8 @@ export default function AttendancePage() {
       'รหัสพนักงาน',
       'ชื่อ-นามสกุล',
       'ฝ่าย',
-      'เวลาเข้างาน (Check-in)',
-      'เวลาออกงาน (Check-out)',
+      'เวลาเข้างาน',
+      'เวลาออกงาน',
       'รวมชั่วโมงทำงาน',
       'สถานะ',
     ];
@@ -50,7 +50,7 @@ export default function AttendancePage() {
       formatThaiTime(p.check_in_time),
       formatThaiTime(p.check_out_time),
       p.hours_worked !== null ? `${p.hours_worked} ชม.` : '-',
-      p.status === 'open' ? 'กำลังทำงาน' : 'บันทึกครบ (ปิดรอบ)',
+      p.status === 'open' ? 'กำลังทำงาน' : 'บันทึกครบถ้วน',
     ]);
 
     const csvContent =
@@ -68,9 +68,9 @@ export default function AttendancePage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">📅 ประวัติการบันทึกเวลาเข้า-ออกงาน (Attendance Logs)</h1>
+        <h1 className="page-title">ประวัติการบันทึกเวลาเข้า-ออกงาน</h1>
         <button onClick={handleExportCSV} className="btn btn-primary" disabled={!filteredPairs?.length}>
-          📥 ส่งออกรายงาน CSV
+          ส่งออกรายงาน CSV
         </button>
       </div>
 
@@ -151,8 +151,8 @@ export default function AttendancePage() {
               <th>รหัสพนักงาน</th>
               <th>ชื่อ-นามสกุล</th>
               <th>ฝ่าย</th>
-              <th>เวลาเข้างาน (Check-in)</th>
-              <th>เวลาออกงาน (Check-out)</th>
+              <th>เวลาเข้างาน</th>
+              <th>เวลาออกงาน</th>
               <th>รวมชั่วโมง</th>
               <th>สถานะ</th>
             </tr>
@@ -171,7 +171,7 @@ export default function AttendancePage() {
                 <td>
                   {p.check_in_time ? (
                     <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>
-                      🟢 {formatThaiTime(p.check_in_time)}
+                      {formatThaiTime(p.check_in_time)}
                     </span>
                   ) : (
                     <span style={{ color: 'var(--text-muted)' }}>-</span>
@@ -180,7 +180,7 @@ export default function AttendancePage() {
                 <td>
                   {p.check_out_time ? (
                     <span style={{ color: '#d63031', fontWeight: 'bold' }}>
-                      🔴 {formatThaiTime(p.check_out_time)}
+                      {formatThaiTime(p.check_out_time)}
                     </span>
                   ) : (
                     <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>ยังไม่ออกงาน</span>
@@ -218,7 +218,7 @@ export default function AttendancePage() {
                         fontWeight: 600,
                       }}
                     >
-                      บันทึกครบ (ปิดรอบ)
+                      บันทึกครบถ้วน
                     </span>
                   )}
                 </td>

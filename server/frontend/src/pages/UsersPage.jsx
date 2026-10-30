@@ -232,9 +232,9 @@ export default function UsersPage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">👤 จัดการผู้ใช้งานและใบหน้า (Users & Face Enrollment)</h1>
+        <h1 className="page-title">ข้อมูลพนักงาน</h1>
         <button onClick={openCreateModal} className="btn btn-primary">
-          ➕ เพิ่มผู้ใช้งานใหม่
+          เพิ่มพนักงาน
         </button>
       </div>
 
@@ -243,7 +243,7 @@ export default function UsersPage() {
         <input
           type="text"
           className="input-field"
-          placeholder="🔍 ค้นหาชื่อ, รหัสพนักงาน หรือฝ่าย..."
+          placeholder="ค้นหาชื่อ, รหัสพนักงาน หรือฝ่าย..."
           value={searchUser}
           onChange={(e) => setSearchUser(e.target.value)}
         />
@@ -301,9 +301,9 @@ export default function UsersPage() {
                   <td>{u.department || '-'}</td>
                   <td>
                     <div style={{ fontSize: '0.85rem' }}>
-                      <div>🟢 เริ่ม: {formatThaiDate(u.start_date)}</div>
+                      <div>เริ่ม: {formatThaiDate(u.start_date)}</div>
                       {u.end_date ? (
-                        <div>🔴 สิ้นสุด: {formatThaiDate(u.end_date)}</div>
+                        <div>สิ้นสุด: {formatThaiDate(u.end_date)}</div>
                       ) : (
                         <div style={{ color: 'var(--text-muted)' }}>พนักงานประจำ</div>
                       )}
@@ -317,7 +317,7 @@ export default function UsersPage() {
                       {u.has_face ? (
                         <>
                           <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                            ✅ มีข้อมูลใบหน้า
+                            มีข้อมูลใบหน้า
                           </span>
                           <button
                             onClick={() => openEnrollModal(u)}
@@ -332,20 +332,20 @@ export default function UsersPage() {
                               border: '1px solid #bae6fd',
                             }}
                           >
-                            🔄 อัปเดตใหม่
+                            อัปเดตใบหน้า
                           </button>
                         </>
                       ) : (
                         <>
                           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            ❌ ยังไม่ลงทะเบียน
+                            ยังไม่ลงทะเบียน
                           </span>
                           <button
                             onClick={() => openEnrollModal(u)}
                             className="btn btn-primary"
                             style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
                           >
-                            📸 ลงทะเบียนใบหน้า
+                            ลงทะเบียนใบหน้า
                           </button>
                         </>
                       )}
@@ -359,14 +359,14 @@ export default function UsersPage() {
                         className="btn"
                         style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: 'var(--warning)', color: '#000' }}
                       >
-                        ✏️ แก้ไข
+                        แก้ไข
                       </button>
                       <button
                         onClick={() => handleDelete(u.id, u.name)}
                         className="btn btn-danger"
                         style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                       >
-                        🗑️ ลบ
+                        ลบ
                       </button>
                     </div>
                   </td>
@@ -399,7 +399,7 @@ export default function UsersPage() {
         >
           <div className="login-card" style={{ maxWidth: '520px', width: '90%' }}>
             <h3 style={{ marginBottom: '1rem' }}>
-              {editUser ? `✏️ แก้ไขข้อมูลพนักงาน (${editUser.name})` : '➕ เพิ่มผู้ใช้งานใหม่'}
+              {editUser ? `แก้ไขข้อมูลพนักงาน: ${editUser.name}` : 'เพิ่มพนักงานใหม่'}
             </h3>
             <form onSubmit={handleUserSubmit}>
               <div className="form-group">
@@ -472,7 +472,7 @@ export default function UsersPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                 <div className="form-group">
-                  <label>📅 วันที่เริ่มงาน *</label>
+                  <label>วันที่เริ่มงาน *</label>
                   <input
                     type="date"
                     className="input-field"
@@ -483,7 +483,7 @@ export default function UsersPage() {
                 </div>
 
                 <div className="form-group">
-                  <label>📅 วันสิ้นสุดสัญญา (ถ้ามี)</label>
+                  <label>วันสิ้นสุดสัญญา (ถ้ามี)</label>
                   <input
                     type="date"
                     className="input-field"
@@ -504,8 +504,8 @@ export default function UsersPage() {
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   >
-                    <option value="active">Active (ปกติ)</option>
-                    <option value="inactive">Inactive (ระงับชั่วคราว)</option>
+                    <option value="active">ปกติ</option>
+                    <option value="inactive">ระงับชั่วคราว</option>
                   </select>
                 </div>
               )}
@@ -550,7 +550,7 @@ export default function UsersPage() {
         >
           <div className="login-card" style={{ maxWidth: '500px', width: '90%' }}>
             <h3 style={{ marginBottom: '0.5rem' }}>
-              📸 ลงทะเบียนใบหน้าพนักงาน
+              ลงทะเบียนใบหน้าพนักงาน
             </h3>
             <p style={{ fontSize: '0.95rem', color: 'var(--primary)', fontWeight: 'bold', marginBottom: '1rem' }}>
               พนักงาน: {enrollUser.employee_id ? `[${enrollUser.employee_id}] ` : ''}{enrollUser.name} ({enrollUser.department || 'ไม่ระบุฝ่าย'})
@@ -573,7 +573,7 @@ export default function UsersPage() {
                 />
                 {imageFiles.length > 0 && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--primary)', marginTop: '0.4rem', fontWeight: 'bold' }}>
-                    📷 เลือกแล้ว {imageFiles.length} รูป (สูงสุด 5 รูป)
+                    เลือกแล้ว {imageFiles.length} รูป (สูงสุด 5 รูป)
                   </p>
                 )}
               </div>
@@ -595,7 +595,7 @@ export default function UsersPage() {
                   className="btn btn-primary"
                   disabled={uploadEnrollmentMutation.isPending || imageFiles.length === 0}
                 >
-                  {uploadEnrollmentMutation.isPending ? 'กำลังอัปโหลด...' : `🚀 ส่งประมวลผล (${imageFiles.length} รูป)`}
+                  {uploadEnrollmentMutation.isPending ? 'กำลังอัปโหลด...' : `ส่งประมวลผล (${imageFiles.length} รูป)`}
                 </button>
               </div>
             </form>

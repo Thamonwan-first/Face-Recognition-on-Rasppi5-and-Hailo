@@ -36,7 +36,7 @@ export default function LoginPage() {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h2>🔐 เข้าสู่ระบบ</h2>
+          <h2>เข้าสู่ระบบ</h2>
           <p style={{ color: 'var(--text-muted)', marginTop: '0.25rem' }}>
             แดชบอร์ดจัดการระบบบันทึกเวลา
           </p>
@@ -59,7 +59,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>ชื่อผู้ใช้งาน (Username)</label>
+            <label>ชื่อผู้ใช้งาน</label>
             <input
               type="text"
               className="input-field"
@@ -71,7 +71,7 @@ export default function LoginPage() {
           </div>
 
           <div className="form-group">
-            <label>รหัสผ่าน (Password)</label>
+            <label>รหัสผ่าน</label>
             <input
               type="password"
               className="input-field"
