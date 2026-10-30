@@ -18,7 +18,8 @@ func NewUserRepository(db *sql.DB) ports.UserRepository {
 
 func (r *userRepo) GetByID(ctx context.Context, id string) (*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
 	FROM users u
 	WHERE u.id = $1
@@ -29,7 +30,8 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*entity.User, error)
 
 func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
 	FROM users u
 	WHERE u.employee_id = $1
@@ -40,7 +42,8 @@ func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*ent
 
 func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
 	FROM users u
 	WHERE u.deleted_at IS NULL
@@ -69,12 +72,12 @@ func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.Use
 
 func (r *userRepo) Create(ctx context.Context, u *entity.User) error {
 	query := `
-	INSERT INTO users (id, employee_id, title, first_name, last_name, name, department, status, version, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (SELECT COALESCE(MAX(version), 0) + 1 FROM users), $9, $10)
+	INSERT INTO users (id, employee_id, title, first_name, last_name, name, department, status, start_date, end_date, version, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (SELECT COALESCE(MAX(version), 0) + 1 FROM users), $11, $12)
 	RETURNING version
 	`
 	err := r.db.QueryRowContext(ctx, query,
-		u.ID, u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.CreatedAt, u.UpdatedAt).Scan(&u.Version)
+		u.ID, u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.CreatedAt, u.UpdatedAt).Scan(&u.Version)
 	return err
 }
 
@@ -82,13 +85,14 @@ func (r *userRepo) Update(ctx context.Context, u *entity.User) error {
 	query := `
 	UPDATE users SET
 		employee_id = $1, title = $2, first_name = $3, last_name = $4, name = $5, department = $6, status = $7,
+		start_date = $8, end_date = $9,
 		version = (SELECT COALESCE(MAX(version), 0) + 1 FROM users),
-		updated_at = $8
-	WHERE id = $9
+		updated_at = $10
+	WHERE id = $11
 	RETURNING version
 	`
 	err := r.db.QueryRowContext(ctx, query,
-		u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.UpdatedAt, u.ID).Scan(&u.Version)
+		u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.UpdatedAt, u.ID).Scan(&u.Version)
 	return err
 }
 
@@ -115,7 +119,8 @@ func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
 
 func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status, u.version, u.deleted_at, u.created_at, u.updated_at,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (e.id IS NOT NULL) as has_embedding,
 	       e.embedding
 	FROM users u
@@ -132,12 +137,13 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*e
 	var users []*entity.User
 	for rows.Next() {
 		var u entity.User
-		var empID, title, fName, lName, dept sql.NullString
+		var empID, title, fName, lName, dept, startDate, endDate sql.NullString
 		var deletedAt sql.NullTime
 		var rawEmb []byte
 
 		if err := rows.Scan(
-			&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding, &rawEmb,
+			&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status,
+			&startDate, &endDate, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding, &rawEmb,
 		); err != nil {
 			return nil, err
 		}
@@ -147,6 +153,12 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*e
 		u.FirstName = fName.String
 		u.LastName = lName.String
 		u.Department = dept.String
+		if startDate.Valid {
+			u.StartDate = &startDate.String
+		}
+		if endDate.Valid {
+			u.EndDate = &endDate.String
+		}
 		if deletedAt.Valid {
 			u.DeletedAt = &deletedAt.Time
 		}
@@ -205,11 +217,12 @@ type rowScanner interface {
 
 func scanUser(scanner rowScanner) (*entity.User, error) {
 	var u entity.User
-	var empID, title, fName, lName, dept sql.NullString
+	var empID, title, fName, lName, dept, startDate, endDate sql.NullString
 	var deletedAt sql.NullTime
 
 	if err := scanner.Scan(
-		&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding,
+		&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status,
+		&startDate, &endDate, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, entity.ErrNotFound
@@ -222,6 +235,12 @@ func scanUser(scanner rowScanner) (*entity.User, error) {
 	u.FirstName = fName.String
 	u.LastName = lName.String
 	u.Department = dept.String
+	if startDate.Valid {
+		u.StartDate = &startDate.String
+	}
+	if endDate.Valid {
+		u.EndDate = &endDate.String
+	}
 	if deletedAt.Valid {
 		u.DeletedAt = &deletedAt.Time
 	}

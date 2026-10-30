@@ -24,13 +24,15 @@ func NewUserUseCase(userRepo ports.UserRepository, auditRepo ports.AuditReposito
 }
 
 type UserDTO struct {
-	EmployeeID string `json:"employee_id"`
-	Title      string `json:"title"`
-	FirstName  string `json:"first_name"`
-	LastName   string `json:"last_name"`
-	Name       string `json:"name"`
-	Department string `json:"department"`
-	Status     string `json:"status"`
+	EmployeeID string  `json:"employee_id"`
+	Title      string  `json:"title"`
+	FirstName  string  `json:"first_name"`
+	LastName   string  `json:"last_name"`
+	Name       string  `json:"name"`
+	Department string  `json:"department"`
+	Status     string  `json:"status"`
+	StartDate  *string `json:"start_date"`
+	EndDate    *string `json:"end_date"`
 }
 
 func (uc *UserUseCase) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
@@ -74,6 +76,8 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 		Name:       dto.Name,
 		Department: dto.Department,
 		Status:     dto.Status,
+		StartDate:  dto.StartDate,
+		EndDate:    dto.EndDate,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -132,6 +136,12 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 	}
 	if dto.Status != "" {
 		user.Status = dto.Status
+	}
+	if dto.StartDate != nil {
+		user.StartDate = dto.StartDate
+	}
+	if dto.EndDate != nil {
+		user.EndDate = dto.EndDate
 	}
 
 	user.UpdatedAt = time.Now().UTC()

@@ -84,8 +84,18 @@ func (uc *SyncUseCase) GetUsersSince(ctx context.Context, sinceVersion int) (*Us
 
 	latestV, _ := uc.userRepo.GetLatestVersion(ctx)
 
+	nowStr := time.Now().Format("2006-01-02")
 	items := make([]*UserSyncItem, 0, len(users))
 	for _, u := range users {
+		effectiveStatus := u.Status
+		// Check employment period
+		if u.StartDate != nil && *u.StartDate != "" && *u.StartDate > nowStr {
+			effectiveStatus = "inactive" // Not started yet
+		}
+		if u.EndDate != nil && *u.EndDate != "" && *u.EndDate < nowStr {
+			effectiveStatus = "inactive" // Contract expired
+		}
+
 		item := &UserSyncItem{
 			ID:         u.ID,
 			EmployeeID: u.EmployeeID,
@@ -94,11 +104,12 @@ func (uc *SyncUseCase) GetUsersSince(ctx context.Context, sinceVersion int) (*Us
 			LastName:   u.LastName,
 			Name:       u.Name,
 			Department: u.Department,
-			Status:     u.Status,
+			Status:     effectiveStatus,
 			Version:    u.Version,
 		}
 
-		if len(u.RawEmbedding) > 0 {
+		// Only include embedding vector if the user is currently active
+		if effectiveStatus == "active" && len(u.RawEmbedding) > 0 {
 			b64 := base64.StdEncoding.EncodeToString(u.RawEmbedding)
 			item.EmbeddingB64 = &b64
 		}

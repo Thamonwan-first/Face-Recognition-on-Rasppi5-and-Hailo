@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
-import { formatThaiDateTime } from '../utils/date';
+import { formatThaiDateTime, formatThaiDate } from '../utils/date';
 
 export const DIVISIONS = [
   'ฝ่ายระบบลำเลียงแสง',
@@ -37,6 +37,8 @@ const INITIAL_FORM = {
   last_name: '',
   department: DIVISIONS[0],
   status: 'active',
+  start_date: new Date().toISOString().slice(0, 10),
+  end_date: '',
 };
 
 export default function UsersPage() {
@@ -150,6 +152,8 @@ export default function UsersPage() {
       last_name: lastName,
       department: u.department || DIVISIONS[0],
       status: u.status || 'active',
+      start_date: u.start_date || '',
+      end_date: u.end_date || '',
     });
     setShowUserModal(true);
   };
@@ -166,6 +170,8 @@ export default function UsersPage() {
       name: fullName,
       department: formData.department,
       status: formData.status,
+      start_date: formData.start_date || null,
+      end_date: formData.end_date || null,
     };
 
     if (editUser) {
@@ -255,9 +261,9 @@ export default function UsersPage() {
               <th>คำนำหน้า</th>
               <th>ชื่อ-นามสกุล</th>
               <th>ฝ่าย</th>
+              <th>ช่วงสัญญาปฏิบัติงาน</th>
               <th>สถานะผู้ใช้</th>
               <th>ข้อมูลใบหน้า</th>
-              <th>Sync Version</th>
               <th>จัดการ</th>
             </tr>
           </thead>
@@ -293,6 +299,16 @@ export default function UsersPage() {
                   </td>
                   <td>{displayName || u.name}</td>
                   <td>{u.department || '-'}</td>
+                  <td>
+                    <div style={{ fontSize: '0.85rem' }}>
+                      <div>🟢 เริ่ม: {formatThaiDate(u.start_date)}</div>
+                      {u.end_date ? (
+                        <div>🔴 สิ้นสุด: {formatThaiDate(u.end_date)}</div>
+                      ) : (
+                        <div style={{ color: 'var(--text-muted)' }}>พนักงานประจำ</div>
+                      )}
+                    </div>
+                  </td>
                   <td>
                     <StatusBadge status={u.status} />
                   </td>
@@ -452,6 +468,32 @@ export default function UsersPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                <div className="form-group">
+                  <label>📅 วันที่เริ่มงาน *</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>📅 วันสิ้นสุดสัญญา (ถ้ามี)</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={formData.end_date}
+                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    * เว้นว่างได้สำหรับพนักงานประจำ
+                  </span>
+                </div>
               </div>
 
               {editUser && (

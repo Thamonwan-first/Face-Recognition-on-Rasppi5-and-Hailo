@@ -105,10 +105,9 @@ class UserSyncWorker:
                         (user_id, u.get("employee_id"), u["name"], u.get("department"), u.get("status", "active"), u.get("version", 0))
                     )
                     emb_b64 = u.get("embedding_b64")
-                    if emb_b64:
+                    cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
+                    if emb_b64 and u.get("status") == "active":
                         emb_bytes = base64.b64decode(emb_b64)
-                        # Ensure no duplicate embeddings exist for this user
-                        cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
                         cur.execute(
                             """
                             INSERT INTO user_embeddings (id, user_id, embedding, model_version, source)

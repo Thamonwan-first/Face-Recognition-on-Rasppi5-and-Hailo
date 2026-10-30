@@ -89,11 +89,17 @@ func createSchema(db *sql.DB) error {
 		name VARCHAR(255) NOT NULL,
 		department VARCHAR(128),
 		status VARCHAR(32) DEFAULT 'active',
+		start_date DATE,
+		end_date DATE,
 		version INTEGER DEFAULT 1,
 		deleted_at TIMESTAMPTZ,
 		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);
+
+	-- Migration: ensure start_date and end_date columns exist if table was previously created
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS start_date DATE;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS end_date DATE;
 
 	CREATE TABLE IF NOT EXISTS user_embeddings (
 		id VARCHAR(64) PRIMARY KEY,

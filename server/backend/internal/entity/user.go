@@ -11,6 +11,8 @@ type User struct {
 	Name         string     `json:"name"`
 	Department   string     `json:"department"`
 	Status       string     `json:"status"`
+	StartDate    *string    `json:"start_date"`
+	EndDate      *string    `json:"end_date"`
 	Version      int        `json:"version"`
 	DeletedAt    *time.Time `json:"deleted_at"`
 	CreatedAt    time.Time  `json:"created_at"`
