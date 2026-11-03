@@ -103,7 +103,7 @@
 │   │   └── setup.sh            # สคริปต์เตรียม Virtualenv และ Dependency
 │   ├── ui/                     # ส่วนหน้าจอสัมผัส PyQt5 (Portrait 480×800)
 │   │   ├── __init__.py
-│   │   └── app.py              # หน้าจอลงเวลา + สลับเข้า/ออก + กล่องลงทะเบียนใบหน้า 3-5 ภาพ
+│   │   └── app.py              # หน้าจอลงเวลามินิมอลไร้สัมผัส แสดงผลนาฬิกา กล้อง และผลลัพธ์การสแกน
 │   └── workers/                # เธรดเบื้องหลังแยกการทำงาน
 │       ├── recognition_worker.py # ลูปจับภาพ + ประมวลผลใบหน้า + บันทึก Event
 │       ├── outbox_worker.py    # ซิงก์ประวัติลงเวลาขึ้นเซิร์ฟเวอร์แบบ Exponential Backoff
@@ -248,7 +248,7 @@ npm run dev
 |---|---|:---:|
 | **1-2** | กำหนดขอบเขตโครงการ, ประกอบและตั้งค่า Pi 5 / Hailo-8 / Camera / OS, วางโครงสร้างโปรเจกต์ | ✅ เรียบร้อย |
 | **3-4** | ติดตั้ง Face Detection (SCRFD) และ 5-Point Alignment บนชิป Hailo-8, สคริปต์ตรวจจับสด, Fallback บนคอมพิวเตอร์ | ✅ เรียบร้อย |
-| **5-6** | ติดตั้ง Feature Extraction (ArcFace MobileFaceNet), ลงทะเบียนใบหน้าที่ Kiosk, ฐานข้อมูล SQLite WAL | ✅ เรียบร้อย |
+| **5-6** | ติดตั้ง Feature Extraction (ArcFace MobileFaceNet), ระบบแปลงและจับคู่เวกเตอร์ใบหน้า, ฐานข้อมูล SQLite WAL | ✅ เรียบร้อย |
 | **7-8** | ปรับจูน Cosine Similarity Threshold, ระบบเปรียบเทียบใบหน้า Matcher, ส่งมอบ MVP กลางภาค | ✅ เรียบร้อย |
 | **8-9** | ออกแบบ Database Schema และสร้าง REST API สำหรับ Kiosk Data Sync | ✅ เรียบร้อย |
 | **9-10** | พัฒนา PyQt5 Touchscreen UI สำหรับจอแสดงผล 7 นิ้วแนวตั้ง (Portrait 480x800), ระบบไร้สัมผัส First-In Last-Out | ✅ เรียบร้อย |
