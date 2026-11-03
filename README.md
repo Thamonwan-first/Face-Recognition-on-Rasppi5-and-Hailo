@@ -60,11 +60,13 @@
 3. **Admin Dashboard (แดชบอร์ดกลาง):**
    * **Frontend:** React 18, Vite, React Router, React Query (@tanstack/react-query), Chart.js
    * **ฟังก์ชันการทำงาน:**
-     * 🖥️ **Devices:** ดูสถานะสดของกล้องทุกตัว (Online/Offline, FPS, อุณหภูมิ CPU, Outbox Pending, Sync Version)
-     * 👤 **Users:** จัดการข้อมูลพนักงาน เพิ่ม/ลบ (Soft Delete) และกระจายไปยังทุก Kiosk อัตโนมัติ
-     * 🕐 **Attendance:** รายการลงเวลาย้อนหลัง, กราฟสรุปความหนาแน่นเวลาทำงาน, ส่งออกรายงานเป็น CSV
-     * 📸 **Enrollment Jobs:** สร้างคำขอลงทะเบียนใบหน้าจากส่วนกลางเพื่อส่งภาพให้ Kiosk ประมวลผล Embedding บนฮาร์ดแวร์จริง
-     * 📝 **Audit Log:** บันทึกประวัติการกระทำของผู้ดูแลระบบทั้งหมดเพื่อความโปร่งใส
+     * **รายการอุปกรณ์ (Devices):** ดูสถานะสดของกล้องทุกตัว (ออนไลน์/ออฟไลน์, FPS, อุณหภูมิ CPU, Outbox Pending, Sync Version)
+     * **ข้อมูลพนักงาน (Users):** จัดการข้อมูลพนักงาน, กำหนดวันเริ่มงาน - วันสิ้นสุดสัญญาจ้าง (ระงับสิทธิ์สแกนหน้าอัตโนมัติเมื่อหมดสัญญา)
+     * **คิวลงทะเบียนใบหน้า (Enrollment Jobs):** สร้างคำขอลงทะเบียนใบหน้าจากส่วนกลาง (อัปโหลด 1-5 ภาพ) ส่งให้ Kiosk ประมวลผลและสร้าง Embedding เฉลี่ย
+     * **ประวัติการลงเวลา (Attendance):** รายการลงเวลาย้อนหลัง, กรองตามวันที่/แผนก, และส่งออกรายงานเป็นไฟล์ CSV
+     * **บันทึกประวัติการใช้งาน (Audit Log):** บันทึกประวัติการกระทำของผู้ดูแลระบบทั้งหมดเพื่อความโปร่งใส
+     * **จัดการผู้ดูแลระบบ (Admins Management):** เพิ่ม/แก้ไข/ลบ บัญชีผู้ดูแลระบบ พร้อมระบบ **เปิด-ปิดสิทธิ์การเข้าถึงแต่ละเมนูได้อย่างอิสระ (Granular Menu Permissions)** รายบุคคล และระบบเปลี่ยนรหัสผ่านของตนเอง
+   * **ความเรียบง่ายและเป็นทางการ:** ส่วนติดต่อผู้ใช้เป็นภาษาไทยล้วน ปราศจากสัญลักษณ์อิโมจิและคำศัพท์ภาษาอังกฤษในวงเล็บ เข้าถึงผ่านเส้นทางตรง `/login`
 
 ---
 
@@ -74,7 +76,10 @@
 .
 ├── Caddyfile                   # การตั้งค่า Caddy Reverse Proxy + Static Web Serving
 ├── docker-compose.yml          # คอนฟิกบริการ Server, PostgreSQL และ Caddy
-├── docs/                       # เอกสารประกอบโครงงาน รายงาน และคู่มือ
+├── document/                   ← โฟลเดอร์เอกสารและรายงานโครงงาน (.docx)
+│   ├── project_proposal.docx   # รายงานข้อเสนอโครงงานฉบับสมบูรณ์
+│   └── รายงานโครงงาน_ระบบบันทึกเวลาทำงานด้วยการรู้จำใบหน้า_5บท.docx # เล่มรายงานโครงงาน 5 บท
+├── docs/                       # เอกสารประกอบโครงงานและคู่มือเพิ่มเติม
 │
 ├── kiosk/                      ← ซอร์สโค้ดฝั่ง Raspberry Pi 5 (Python Flat Layout)
 │   ├── config.example.yaml     # คอนฟิกตัวอย่างหลัก (YAML)
@@ -125,7 +130,7 @@
     │   │   ├── App.jsx         # กำหนด Layout และ Routes ทั้งหมด
     │   │   ├── main.jsx        # จุดเริ่มการเรนเดอร์ React
     │   │   ├── components/     # UI Components (Sidebar, StatusBadge, ProtectedRoute)
-    │   │   └── pages/          # หน้าเว็บ (Devices, Users, Attendance, Enrollment, Audit, Login)
+    │   │   └── pages/          # หน้าเว็บ (Devices, Users, Attendance, Enrollment, Audit, Admins, Login)
     │   ├── index.html
     │   ├── vite.config.js
     │   └── package.json
@@ -223,7 +228,7 @@ go run main.go
 cd ../frontend
 npm install
 npm run dev
-# เข้าใช้งานผ่านเบราว์เซอร์: http://localhost:5173/dashboard/
+# เข้าใช้งานผ่านเบราว์เซอร์: http://localhost:5173/login
 ```
 
 ---
@@ -250,7 +255,7 @@ npm run dev
 | **10-11** | พัฒนาระบบ Offline-first Sync (Outbox Worker, User Pull Sync, Heartbeat, Timezone Reconciliation) | ✅ เรียบร้อย |
 | **11-13** | พัฒนา แดชบอร์ดกลางด้วย React 18 + Vite (Devices, Users, Attendance Log, Analytics, Audit) | ✅ เรียบร้อย |
 | **13-14** | รีแฟคเตอร์ Backend สู่ **Go Clean Architecture + PostgreSQL ล้วน**, ปรับปรุง Big O & Security Audit | ✅ เรียบร้อย |
-| **14-15** | การทดสอบความเสถียร 24-48 ชม., จัดทำคู่มือการติดตั้งและการใช้งานระบบ, จัดทำรายงาน | 🟡 กำลังดำเนินการ |
+| **14-15** | พัฒนาระบบสัญญาจ้างพนักงาน (เริ่มงาน-หมดสัญญา), ระบบจัดการผู้ดูแลและสิทธิ์รายเมนู (Granular RBAC), ปรับปรุงความปลอดภัย, จัดทำเล่มรายงาน 5 บท (.docx) | ✅ เรียบร้อย |
 | **16** | นำเสนอโครงงานสหกิจศึกษาและส่งมอบระบบ | แผนงานถัดไป |
 
 ---
@@ -269,6 +274,9 @@ npm run dev
 | **User Sync N+1 Query** | รวม User ข้อมูลและไบต์ Embedding ด้วย `LEFT JOIN` | ซิงก์ข้อมูลพนักงานทั้งหมดได้ใน 1 Roundtrip |
 | **JWT & Secret Enforcement** | บังคับระบุ `JWT_SECRET` ใน Production | เซิร์ฟเวอร์จะ Crash ทันทีหากไม่ตั้งค่าความปลอดภัย ป้องกันการปลอมแปลง Token |
 | **Kiosk HTTPS Verification** | รองรับการตรวจสอบ CA Certificate ผ่านคอนฟิก `ssl_verify` | ป้องกันการโจมตีแบบ Man-in-the-Middle (MITM) ระหว่างส่งเวกเตอร์และเหตุการณ์ |
+| **Contract Period Control** | เพิ่ม `start_date` และ `end_date` พร้อมระงับสิทธิ์ที่เซิร์ฟเวอร์ | พนักงานที่ยังไม่เริ่มงานหรือหมดสัญญาจะถูกระงับการสแกนหน้าอัตโนมัติ โดยข้อมูลยังคงอยู่ในระบบเพื่อต่อสัญญา |
+| **Granular Menu Permissions** | ระบบสิทธิ์ผู้ดูแลแดชบอร์ดแบบเลือกเปิด-ปิดเมนูอิสระ (RBAC) | กำหนดสิทธิ์รายบุคคลผ่าน Checkbox ป้องกันระดับ Go Middleware (`403 Forbidden`) พร้อมฟังก์ชันเปลี่ยนรหัสผ่าน |
+| **Routing & UI Modernization** | ปรับเส้นทางเข้าสู่ระบบตรงที่ `/login` และทำความสะอาดภาษา | เว็บไซต์สะอาดตา เป็นทางการ ไร้อิโมจิและวงเล็บภาษาอังกฤษ ตอบสนองรวดเร็ว |
 
 ### ⚪ แผนพัฒนาเพิ่มเติม (Future Enhancements)
 
