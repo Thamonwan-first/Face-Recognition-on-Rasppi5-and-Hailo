@@ -10,12 +10,13 @@ export const AVAILABLE_MENUS = [
   { key: 'attendance', label: 'ประวัติการลงเวลา' },
   { key: 'audit', label: 'บันทึกประวัติการใช้งาน' },
   { key: 'admins', label: 'จัดการผู้ดูแลระบบ' },
+  { key: 'settings', label: 'ตั้งค่าระบบ' },
 ];
 
 export const PRESETS = [
   {
     name: 'เลือกทั้งหมด',
-    perms: ['devices', 'users', 'enrollment', 'attendance', 'audit', 'admins'],
+    perms: ['devices', 'users', 'enrollment', 'attendance', 'audit', 'admins', 'settings'],
   },
   {
     name: 'ฝ่ายบุคคล',

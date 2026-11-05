@@ -18,7 +18,6 @@ export default function EnrollmentPage() {
   const { data: jobs, isLoading } = useQuery({
     queryKey: ['enrollment_jobs'],
     queryFn: () => api.get('/api/enrollment/pending'),
-    refetchInterval: 2000, // Real-time poll every 2s
   });
 
   const handleFileChange = (e) => {
@@ -37,6 +36,9 @@ export default function EnrollmentPage() {
       formData.append('user_id', selectedUserId);
       for (const file of imageFiles) {
         formData.append('images', file);
+      }
+      if (imageFiles.length > 0) {
+        formData.append('image', imageFiles[0]);
       }
       return api.post('/api/enrollment', formData, true);
     },

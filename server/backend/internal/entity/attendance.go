@@ -14,18 +14,22 @@ type AttendanceEvent struct {
 }
 
 type AttendancePair struct {
-	ID              int        `json:"id"`
-	UserID          string     `json:"user_id"`
-	UserName        string     `json:"name,omitempty"`
-	EmployeeID      string     `json:"employee_id,omitempty"`
-	Department      string     `json:"department,omitempty"`
-	CheckInEventID  *string    `json:"check_in_event_id"`
-	CheckOutEventID *string    `json:"check_out_event_id"`
-	CheckInTime     *time.Time `json:"check_in_time"`
-	CheckOutTime    *time.Time `json:"check_out_time"`
-	WorkDate        string     `json:"work_date"`
-	HoursWorked     *float64   `json:"hours_worked"`
-	Status          string     `json:"status"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID               int        `json:"id"`
+	UserID           string     `json:"user_id"`
+	UserName         string     `json:"name,omitempty"`
+	EmployeeID       string     `json:"employee_id,omitempty"`
+	Department       string     `json:"department,omitempty"`
+	CheckInEventID   *string    `json:"check_in_event_id"`
+	CheckOutEventID  *string    `json:"check_out_event_id"`
+	CheckInDeviceID  *string    `json:"check_in_device_id,omitempty"`
+	CheckOutDeviceID *string    `json:"check_out_device_id,omitempty"`
+	CheckInTime      *time.Time `json:"check_in_time"`
+	CheckOutTime     *time.Time `json:"check_out_time"`
+	WorkDate         string     `json:"work_date"`
+	HoursWorked      *float64   `json:"hours_worked"`
+	Status           string     `json:"status"`
+	IsManual         bool       `json:"is_manual"`
+	AdjustmentReason string     `json:"adjustment_reason,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }

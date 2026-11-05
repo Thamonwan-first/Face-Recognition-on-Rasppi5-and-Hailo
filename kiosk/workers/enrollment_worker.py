@@ -64,7 +64,12 @@ class EnrollmentWorker:
 
             job_id = job["id"]
             user_id = job["user_id"]
-            images_b64 = job.get("images_b64") or ([job["image_b64"]] if job.get("image_b64") else [])
+            images_b64 = (
+                job.get("images_b64")
+                or data.get("images_b64")
+                or ([job["image_b64"]] if job.get("image_b64") else [])
+                or ([data["image_b64"]] if data.get("image_b64") else [])
+            )
 
             logger.info("Claimed enrollment job %s for user %s (%d image(s))", job_id, user_id, len(images_b64))
 
@@ -124,11 +129,13 @@ class EnrollmentWorker:
             emb_b64 = base64.b64encode(emb_bytes).decode("utf-8")
 
             # Submit result to Server
-            result_url = self.config.get_url(f"/api/enrollment/{job_id}/result") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/api/enrollment/{job_id}/result"
+            result_url = self.config.get_url("/sync/enrollment/result") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/enrollment/result"
             post_headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
             payload = {
+                "job_id": job_id,
                 "embedding_b64": emb_b64,
                 "quality_score": 1.0,
+                "images_count": len(captured_embeddings),
             }
             res_post = requests.post(result_url, json=payload, headers=post_headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
             if res_post.status_code == 200:

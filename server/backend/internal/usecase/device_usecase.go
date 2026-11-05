@@ -31,6 +31,7 @@ type DeviceDTO struct {
 	Name      string `json:"name"`
 	Location  string `json:"location"`
 	Direction string `json:"direction"`
+	IPAddress string `json:"ip_address"`
 }
 
 type RegisterDeviceResponse struct {
@@ -94,6 +95,7 @@ func (uc *DeviceUseCase) Register(ctx context.Context, adminID string, dto *Devi
 		Name:       dto.Name,
 		Location:   dto.Location,
 		Direction:  dto.Direction,
+		IPAddress:  dto.IPAddress,
 		ApiKeyHash: hash,
 		Status:     "offline",
 		CreatedAt:  now,
@@ -156,4 +158,11 @@ func (uc *DeviceUseCase) Delete(ctx context.Context, adminID, id string) error {
 		CreatedAt:  now,
 	})
 	return nil
+}
+
+func (uc *DeviceUseCase) UpdateIP(ctx context.Context, id, ip string) error {
+	if id == "" || ip == "" {
+		return nil
+	}
+	return uc.deviceRepo.UpdateIPAddress(ctx, id, ip)
 }

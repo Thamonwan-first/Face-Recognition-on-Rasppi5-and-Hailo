@@ -11,4 +11,7 @@ type EnrollmentJob struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	ProcessedAt      *time.Time `json:"processed_at"`
 	ExpiresAt        *time.Time `json:"expires_at"`
+	ImageB64         string     `json:"image_b64,omitempty"`
+	ImagesB64        []string   `json:"images_b64,omitempty"`
 }
+

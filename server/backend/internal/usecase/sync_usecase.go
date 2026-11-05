@@ -39,11 +39,15 @@ type HeartbeatDTO struct {
 	CPUTemp        *float64 `json:"cpu_temp"`
 	FPS            *float64 `json:"fps"`
 	OutboxPending  int      `json:"outbox_pending"`
+	IPAddress      string   `json:"ip_address"`
 }
 
 func (uc *SyncUseCase) Heartbeat(ctx context.Context, deviceID string, dto *HeartbeatDTO) error {
 	now := time.Now().UTC()
 	_ = uc.deviceRepo.UpdateStatus(ctx, deviceID, "online", now)
+	if dto.IPAddress != "" {
+		_ = uc.deviceRepo.UpdateIPAddress(ctx, deviceID, dto.IPAddress)
+	}
 
 	state := &entity.DeviceState{
 		DeviceID:       deviceID,

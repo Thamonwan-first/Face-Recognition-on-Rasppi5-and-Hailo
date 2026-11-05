@@ -24,6 +24,7 @@ type DeviceRepository interface {
 	List(ctx context.Context) ([]*entity.Device, error)
 	Create(ctx context.Context, device *entity.Device) error
 	UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error
+	UpdateIPAddress(ctx context.Context, id string, ip string) error
 	UpdateState(ctx context.Context, state *entity.DeviceState) error
 	Delete(ctx context.Context, id string) error
 }
@@ -47,10 +48,16 @@ type AttendanceRepository interface {
 	SaveEvent(ctx context.Context, event *entity.AttendanceEvent) error
 	GetEventByID(ctx context.Context, eventID string) (*entity.AttendanceEvent, error)
 	ListEvents(ctx context.Context, limit int) ([]*entity.AttendanceEvent, error)
-	ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*entity.AttendancePair, error)
+	ListPairs(ctx context.Context, startDate, endDate, userID, department, deviceID string, limit int) ([]*entity.AttendancePair, error)
+	GetPairByID(ctx context.Context, id int) (*entity.AttendancePair, error)
 	FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error)
 	SavePair(ctx context.Context, pair *entity.AttendancePair) error
 	UpdatePair(ctx context.Context, pair *entity.AttendancePair) error
+}
+
+type SettingsRepository interface {
+	GetSettings(ctx context.Context) (*entity.SystemSettings, error)
+	UpdateSettings(ctx context.Context, settings *entity.SystemSettings) error
 }
 
 type EnrollmentRepository interface {

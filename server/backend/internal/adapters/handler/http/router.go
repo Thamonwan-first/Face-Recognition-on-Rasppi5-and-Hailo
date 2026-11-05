@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"attendance-backend/internal/pkg/ratelimit"
 	"attendance-backend/internal/pkg/token"
 	"attendance-backend/internal/usecase"
 	"github.com/gin-contrib/cors"
@@ -18,10 +19,17 @@ type Handlers struct {
 	Sync       *SyncHandler
 	Enrollment *EnrollmentHandler
 	Audit      *AuditHandler
+	Realtime   *RealtimeHandler
+	Settings   *SettingsHandler
 }
 
-func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *usecase.DeviceUseCase) *gin.Engine {
+func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *usecase.DeviceUseCase, limiters ...*ratelimit.TokenBucketLimiter) *gin.Engine {
 	r := gin.Default()
+
+	// Rate Limiting Middleware (In-memory token bucket)
+	if len(limiters) > 0 && limiters[0] != nil {
+		r.Use(RateLimitMiddleware(limiters[0]))
+	}
 
 	// CORS Setup
 	r.Use(cors.New(cors.Config{
@@ -49,6 +57,11 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 	adminAuth := AuthMiddleware(tokenMaker)
 	api := r.Group("/api")
 	{
+		// Real-time Event Stream (Server-Sent Events)
+		if handlers.Realtime != nil {
+			api.GET("/realtime/stream", adminAuth, handlers.Realtime.Stream)
+		}
+
 		// Auth profile & password change
 		api.GET("/auth/me", adminAuth, handlers.Auth.Me)
 		api.POST("/auth/change-password", adminAuth, handlers.Auth.ChangePassword)
@@ -71,6 +84,8 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 			attendance.GET("/pairs", handlers.Attendance.ListPairs)
 			attendance.GET("/summary", handlers.Attendance.ListPairs)
 			attendance.GET("/events", handlers.Attendance.ListEvents)
+			attendance.POST("/manual", handlers.Attendance.ManualAdd)
+			attendance.PUT("/pairs/:id", handlers.Attendance.ManualEdit)
 		}
 
 		// Devices
@@ -106,6 +121,16 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 			admins.POST("", handlers.Auth.CreateAdmin)
 			admins.PUT("/:id", handlers.Auth.UpdateAdmin)
 			admins.DELETE("/:id", handlers.Auth.DeleteAdmin)
+		}
+
+		// System Settings
+		if handlers.Settings != nil {
+			settingsGroup := api.Group("/settings")
+			settingsGroup.Use(adminAuth)
+			{
+				settingsGroup.GET("", RequirePermission("settings"), handlers.Settings.Get)
+				settingsGroup.PUT("", RequirePermission("settings"), handlers.Settings.Update)
+			}
 		}
 	}
 

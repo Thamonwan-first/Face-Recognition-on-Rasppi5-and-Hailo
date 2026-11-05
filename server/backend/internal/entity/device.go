@@ -9,6 +9,7 @@ type Device struct {
 	Direction  string       `json:"direction"`
 	ApiKeyHash string       `json:"-"`
 	Status     string       `json:"status"`
+	IPAddress  string       `json:"ip_address,omitempty"`
 	LastSeen   *time.Time   `json:"last_seen"`
 	CreatedAt  time.Time    `json:"created_at"`
 	RevokedAt  *time.Time   `json:"revoked_at"`

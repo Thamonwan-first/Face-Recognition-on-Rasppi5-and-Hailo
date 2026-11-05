@@ -16,19 +16,26 @@ const (
 
 func AuthMiddleware(tokenMaker *token.TokenMaker) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var accessToken string
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+		if authHeader != "" {
+			fields := strings.Fields(authHeader)
+			if len(fields) == 2 && strings.ToLower(fields[0]) == "bearer" {
+				accessToken = fields[1]
+			} else {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
+				return
+			}
+		} else {
+			// Support query parameter ?token= for SSE (EventSource) connections
+			accessToken = c.Query("token")
+		}
+
+		if accessToken == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header or token parameter required"})
 			return
 		}
 
-		fields := strings.Fields(authHeader)
-		if len(fields) != 2 || strings.ToLower(fields[0]) != "bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
-			return
-		}
-
-		accessToken := fields[1]
 		claims, err := tokenMaker.VerifyToken(accessToken)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
@@ -88,6 +95,10 @@ func DeviceAuthMiddleware(deviceUC *usecase.DeviceUseCase) gin.HandlerFunc {
 		}
 
 		c.Set(ContextDeviceKey, device)
+		if clientIP := c.ClientIP(); clientIP != "" && device.IPAddress != clientIP {
+			device.IPAddress = clientIP
+			_ = deviceUC.UpdateIP(c.Request.Context(), device.ID, clientIP)
+		}
 		c.Next()
 	}
 }

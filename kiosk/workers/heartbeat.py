@@ -4,6 +4,7 @@ Implements thread-isolated SQLite connection.
 """
 import time
 import logging
+import socket
 import threading
 from pathlib import Path
 import requests
@@ -12,6 +13,17 @@ from database import get_connection
 from metrics import MetricsTracker
 
 logger = logging.getLogger(__name__)
+
+
+def get_local_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('10.255.255.255', 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return '127.0.0.1'
 
 
 class HeartbeatWorker:
@@ -78,6 +90,7 @@ class HeartbeatWorker:
             "cpu_temp": MetricsTracker.get_cpu_temperature(),
             "fps": MetricsTracker.get_fps(),
             "outbox_pending": MetricsTracker.get_outbox_pending_count(conn),
+            "ip_address": get_local_ip(),
         }
 
         try:

@@ -1,13 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { api } from '../api';
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ old_password: '', new_password: '', confirm_password: '' });
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordLoading, setPasswordLoading] = useState(false);
 
   let currentUser = { username: 'admin', role: 'admin', permissions: ['*'] };
   try {
@@ -29,88 +24,56 @@ export default function Sidebar() {
     navigate('/login');
   };
 
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    setPasswordError('');
-
-    if (passwordForm.new_password.length < 6) {
-      setPasswordError('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
-      return;
-    }
-    if (passwordForm.new_password !== passwordForm.confirm_password) {
-      setPasswordError('รหัสผ่านใหม่กับยืนยันรหัสผ่านไม่ตรงกัน');
-      return;
-    }
-
-    setPasswordLoading(true);
-    try {
-      await api.post('/api/auth/change-password', {
-        old_password: passwordForm.old_password,
-        new_password: passwordForm.new_password,
-      });
-      alert('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว');
-      setShowPasswordModal(false);
-      setPasswordForm({ old_password: '', new_password: '', confirm_password: '' });
-    } catch (err) {
-      setPasswordError(err.message || 'เปลี่ยนรหัสผ่านไม่สำเร็จ');
-    } finally {
-      setPasswordLoading(false);
-    }
-  };
-
   return (
-    <>
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h2>ระบบบันทึกเวลาทำงาน</h2>
-        </div>
+    <aside className="sidebar">
+      <div className="sidebar-header">
+        <h2>ระบบบันทึกเวลาทำงาน</h2>
+      </div>
 
-        <ul className="sidebar-nav">
-          {hasPerm('devices') && (
-            <li>
-              <NavLink to="/devices">รายการอุปกรณ์</NavLink>
-            </li>
-          )}
-          {hasPerm('users') && (
-            <li>
-              <NavLink to="/users">ข้อมูลพนักงาน</NavLink>
-            </li>
-          )}
-          {hasPerm('enrollment') && (
-            <li>
-              <NavLink to="/enrollment">คิวลงทะเบียนใบหน้า</NavLink>
-            </li>
-          )}
-          {hasPerm('attendance') && (
-            <li>
-              <NavLink to="/attendance">ประวัติการลงเวลา</NavLink>
-            </li>
-          )}
-          {hasPerm('audit') && (
-            <li>
-              <NavLink to="/audit">บันทึกประวัติการใช้งาน</NavLink>
-            </li>
-          )}
-          {hasPerm('admins') && (
-            <li>
-              <NavLink to="/admins">จัดการผู้ดูแลระบบ</NavLink>
-            </li>
-          )}
-        </ul>
+      <ul className="sidebar-nav">
+        {hasPerm('devices') && (
+          <li>
+            <NavLink to="/devices">รายการอุปกรณ์</NavLink>
+          </li>
+        )}
+        {hasPerm('users') && (
+          <li>
+            <NavLink to="/users">ข้อมูลพนักงาน</NavLink>
+          </li>
+        )}
+        {hasPerm('attendance') && (
+          <li>
+            <NavLink to="/attendance">ประวัติการลงเวลา</NavLink>
+          </li>
+        )}
+        {hasPerm('audit') && (
+          <li>
+            <NavLink to="/audit">บันทึกประวัติการใช้งาน</NavLink>
+          </li>
+        )}
+        {hasPerm('admins') && (
+          <li>
+            <NavLink to="/admins">จัดการผู้ดูแลระบบ</NavLink>
+          </li>
+        )}
+      </ul>
 
-        <div className="sidebar-footer">
-          {/* กล่องแสดงสิทธิ์ผู้ใช้งานปัจจุบัน */}
-          <div
-            style={{
-              padding: '0.65rem 0.75rem',
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              borderRadius: '6px',
-              marginBottom: '0.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.65rem',
-            }}
-          >
+      <div className="sidebar-footer">
+        {/* กล่องแสดงสิทธิ์ผู้ใช้งานปัจจุบัน พร้อมไอคอนฟันเฟืองตรงกลางกรอบด้านขวา */}
+        <div
+          style={{
+            padding: '0.65rem 0.75rem',
+            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: '6px',
+            marginBottom: '0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.65rem',
+          }}
+        >
+          {/* ส่วนซ้าย: รูปโปรไฟล์ + ชื่อ + บทบาท */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', overflow: 'hidden', flex: 1 }}>
             <div
               style={{
                 width: '32px',
@@ -128,7 +91,7 @@ export default function Sidebar() {
             >
               {currentUser.username ? currentUser.username.charAt(0).toUpperCase() : 'A'}
             </div>
-            <div style={{ overflow: 'hidden', flex: 1 }}>
+            <div style={{ overflow: 'hidden' }}>
               <div
                 style={{
                   fontSize: '0.88rem',
@@ -147,126 +110,60 @@ export default function Sidebar() {
                   fontSize: '0.74rem',
                   color: currentUser.role === 'admin' ? '#2ed573' : '#70a1ff',
                   fontWeight: 500,
-                  marginTop: '1px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
+                  marginTop: '2px',
                 }}
               >
-                <span>{currentUser.role === 'admin' ? 'ผู้ดูแลระบบสูงสุด' : 'ผู้ใช้งานแดชบอร์ด'}</span>
+                {currentUser.role === 'admin' ? 'ผู้ดูแลระบบสูงสุด' : 'ผู้ใช้งานแดชบอร์ด'}
               </div>
             </div>
           </div>
 
+          {/* ส่วนขวา: ไอคอนฟันเฟืองลอยตัวตรงกลางความสูงของกรอบ โดยไม่มีกรอบสี่เหลี่ยม */}
           <button
-            onClick={() => {
-              setPasswordError('');
-              setPasswordForm({ old_password: '', new_password: '', confirm_password: '' });
-              setShowPasswordModal(true);
-            }}
-            className="btn"
+            onClick={() => navigate('/settings')}
+            title="ตั้งค่า (เปลี่ยนรหัสผ่าน / ตั้งค่าระบบ)"
             style={{
-              width: '100%',
-              marginBottom: '0.5rem',
-              background: 'rgba(255, 255, 255, 0.12)',
-              color: '#fff',
-              fontSize: '0.8rem',
-              padding: '0.45rem',
+              background: 'none',
+              border: 'none',
+              padding: '4px',
+              margin: '0',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'color 0.2s, transform 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#ffffff';
+              e.currentTarget.style.transform = 'rotate(45deg)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.transform = 'none';
             }}
           >
-            เปลี่ยนรหัสผ่าน
-          </button>
-
-          <button onClick={handleLogout} className="btn-logout">
-            ออกจากระบบ
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
           </button>
         </div>
-      </aside>
 
-      {/* Modal เปลี่ยนรหัสผ่านของตนเอง */}
-      {showPasswordModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 200,
-          }}
-        >
-          <div className="login-card" style={{ maxWidth: '420px', width: '90%' }}>
-            <h3 style={{ marginBottom: '1rem' }}>เปลี่ยนรหัสผ่านของตนเอง</h3>
-
-            {passwordError && (
-              <div
-                style={{
-                  padding: '0.6rem 0.8rem',
-                  backgroundColor: '#fde8e8',
-                  color: 'var(--danger)',
-                  borderRadius: '6px',
-                  marginBottom: '1rem',
-                  fontSize: '0.85rem',
-                }}
-              >
-                {passwordError}
-              </div>
-            )}
-
-            <form onSubmit={handlePasswordSubmit}>
-              <div className="form-group">
-                <label>รหัสผ่านปัจจุบัน *</label>
-                <input
-                  type="password"
-                  className="input-field"
-                  value={passwordForm.old_password}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>รหัสผ่านใหม่ *</label>
-                <input
-                  type="password"
-                  className="input-field"
-                  placeholder="ความยาวอย่างน้อย 6 ตัวอักษร"
-                  value={passwordForm.new_password}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>ยืนยันรหัสผ่านใหม่ *</label>
-                <input
-                  type="password"
-                  className="input-field"
-                  placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
-                  value={passwordForm.confirm_password}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className="btn"
-                  style={{ background: '#eee', color: '#333' }}
-                >
-                  ยกเลิก
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={passwordLoading}>
-                  {passwordLoading ? 'กำลังบันทึก...' : 'บันทึกรหัสผ่านใหม่'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </>
+        <button onClick={handleLogout} className="btn-logout">
+          ออกจากระบบ
+        </button>
+      </div>
+    </aside>
   );
 }

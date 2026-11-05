@@ -13,11 +13,12 @@ type Admin struct {
 }
 
 type AuditLog struct {
-	ID         int       `json:"id"`
-	AdminID    *string   `json:"admin_id"`
-	Action     string    `json:"action"`
-	TargetType string    `json:"target_type"`
-	TargetID   string    `json:"target_id"`
-	Detail     string    `json:"detail"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID            int       `json:"id"`
+	AdminID       *string   `json:"admin_id"`
+	AdminUsername string    `json:"admin_username,omitempty"`
+	Action        string    `json:"action"`
+	TargetType    string    `json:"target_type"`
+	TargetID      string    `json:"target_id"`
+	Detail        string    `json:"detail"`
+	CreatedAt     time.Time `json:"created_at"`
 }

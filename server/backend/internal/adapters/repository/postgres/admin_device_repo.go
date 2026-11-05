@@ -108,23 +108,27 @@ func NewDeviceRepository(db *sql.DB) ports.DeviceRepository {
 }
 
 func (r *deviceRepo) GetByID(ctx context.Context, id string) (*entity.Device, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, last_seen, created_at, revoked_at FROM devices WHERE id = $1", id)
+	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, ip_address, last_seen, created_at, revoked_at FROM devices WHERE id = $1", id)
 	return scanDeviceRow(row)
 }
 
 func (r *deviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*entity.Device, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, last_seen, created_at, revoked_at FROM devices WHERE api_key_hash = $1 AND status != 'revoked'", hash)
+	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, ip_address, last_seen, created_at, revoked_at FROM devices WHERE api_key_hash = $1 AND status != 'revoked'", hash)
 	return scanDeviceRow(row)
 }
 
 func scanDeviceRow(row *sql.Row) (*entity.Device, error) {
 	var d entity.Device
 	var lastSeen, revokedAt sql.NullTime
-	if err := row.Scan(&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &lastSeen, &d.CreatedAt, &revokedAt); err != nil {
+	var ipAddr sql.NullString
+	if err := row.Scan(&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &ipAddr, &lastSeen, &d.CreatedAt, &revokedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, entity.ErrNotFound
 		}
 		return nil, err
+	}
+	if ipAddr.Valid {
+		d.IPAddress = ipAddr.String
 	}
 	if lastSeen.Valid {
 		d.LastSeen = &lastSeen.Time
@@ -137,7 +141,7 @@ func scanDeviceRow(row *sql.Row) (*entity.Device, error) {
 
 func (r *deviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 	query := `
-	SELECT d.id, d.name, d.location, d.direction, d.api_key_hash, d.status, d.last_seen, d.created_at, d.revoked_at,
+	SELECT d.id, d.name, d.location, d.direction, d.api_key_hash, d.status, d.ip_address, d.last_seen, d.created_at, d.revoked_at,
 	       s.applied_version, s.model_version, s.sw_version, s.cpu_temp, s.fps, s.outbox_pending, s.updated_at
 	FROM devices d
 	LEFT JOIN device_state s ON d.id = s.device_id
@@ -153,18 +157,22 @@ func (r *deviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 	for rows.Next() {
 		var d entity.Device
 		var lastSeen, revokedAt sql.NullTime
+		var ipAddr sql.NullString
 		var appliedV, outboxPending sql.NullInt64
 		var modelV, swV sql.NullString
 		var cpuTemp, fps sql.NullFloat64
 		var stateUpdated sql.NullTime
 
 		if err := rows.Scan(
-			&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &lastSeen, &d.CreatedAt, &revokedAt,
+			&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &ipAddr, &lastSeen, &d.CreatedAt, &revokedAt,
 			&appliedV, &modelV, &swV, &cpuTemp, &fps, &outboxPending, &stateUpdated,
 		); err != nil {
 			return nil, err
 		}
 
+		if ipAddr.Valid {
+			d.IPAddress = ipAddr.String
+		}
 		if lastSeen.Valid {
 			d.LastSeen = &lastSeen.Time
 		}
@@ -199,11 +207,11 @@ func (r *deviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 
 func (r *deviceRepo) Create(ctx context.Context, device *entity.Device) error {
 	query := `
-	INSERT INTO devices (id, name, location, direction, api_key_hash, status, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7)
+	INSERT INTO devices (id, name, location, direction, api_key_hash, status, ip_address, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		device.ID, device.Name, device.Location, device.Direction, device.ApiKeyHash, device.Status, device.CreatedAt)
+		device.ID, device.Name, device.Location, device.Direction, device.ApiKeyHash, device.Status, device.IPAddress, device.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -213,6 +221,11 @@ func (r *deviceRepo) Create(ctx context.Context, device *entity.Device) error {
 
 func (r *deviceRepo) UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error {
 	_, err := r.db.ExecContext(ctx, "UPDATE devices SET status = $1, last_seen = $2 WHERE id = $3", status, lastSeen, id)
+	return err
+}
+
+func (r *deviceRepo) UpdateIPAddress(ctx context.Context, id string, ip string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE devices SET ip_address = $1 WHERE id = $2", ip, id)
 	return err
 }
 

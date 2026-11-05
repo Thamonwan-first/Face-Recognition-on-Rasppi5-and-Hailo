@@ -48,6 +48,10 @@ Thumbs.db
 logs/
 *.log
 
+# Uploaded data
+server/backend/data/
+data/
+
 # Coverage / test artifacts
 htmlcov/
 .coverage

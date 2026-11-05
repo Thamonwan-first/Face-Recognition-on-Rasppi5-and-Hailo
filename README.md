@@ -48,7 +48,10 @@
    * **Cross-Platform Fallback:** ตรวจจับชิป Hailo และกล้องอัตโนมัติ หากรันบนคอมพิวเตอร์จะสลับไปใช้ CPU Fallback และ Webcam/Mock Stream เพื่อให้ทดสอบโค้ดได้ทันที
    * **Offline-First Storage:** SQLite (WAL mode) เก็บ events, outbox, users และ embeddings พร้อม retention purge ลบข้อมูลซิงก์แล้วเกิน 7 วัน
    * **Sync Workers:** ทำงานเบื้องหลังแยกเธรด (Batch upload พร้อม Exponential Backoff, ดึงข้อมูลผู้ใช้ด้วย `since=<version>`, Heartbeat)
-   * **Touch UI:** พัฒนาด้วย PyQt5 ออกแบบขนาดแนวตั้ง 480×800 (Portrait) พอดีกล่องคีออสก์จอสัมผัส 7 นิ้ว
+   * **Touchless Kiosk UI:** พัฒนาด้วย PyQt5 ออกแบบขนาดแนวตั้ง (Portrait) ล็อกหน้าจอแบบ Frameless Kiosk Mode ป้องกันการปัด/ย่อหน้าต่างหลุดสู่ Desktop, ระบบเพิกเฉยต่อการสัมผัส (Touch-proof), และระบบซ่อนลูกศรเมาส์อัตโนมัติ (Auto-Hide Cursor) เมื่ออยู่นิ่ง โดยมีคีย์ลัดเฉพาะแอดมิน `Ctrl + Q` สำหรับปิดโปรแกรม
+   * **Cross-Platform Fallback:** ตรวจจับชิป Hailo และกล้องอัตโนมัติ หากรันบนคอมพิวเตอร์จะสลับไปใช้ CPU Fallback และ Webcam/Mock Stream เพื่อให้ทดสอบโค้ดได้ทันที
+   * **Offline-First Storage:** SQLite (WAL mode) เก็บ events, outbox, users และ embeddings พร้อม retention purge ลบข้อมูลซิงก์แล้วเกิน 7 วัน
+   * **Sync Workers:** ทำงานเบื้องหลังแยกเธรด (Batch upload พร้อม Exponential Backoff, ดึงข้อมูลผู้ใช้ด้วย `since=<version>`, Heartbeat พร้อมส่งรายงาน IP)
 
 2. **Central Server (เซิร์ฟเวอร์กลาง On-Premise):**
    * **Backend API:** Go (Golang) โครงสร้าง **Clean Architecture** (Gin Framework) ทำงานร่วมกับฐานข้อมูล **PostgreSQL** แบบ Concurrency สูง
@@ -60,12 +63,12 @@
 3. **Admin Dashboard (แดชบอร์ดกลาง):**
    * **Frontend:** React 18, Vite, React Router, React Query (@tanstack/react-query), Chart.js
    * **ฟังก์ชันการทำงาน:**
-     * **รายการอุปกรณ์ (Devices):** ดูสถานะสดของกล้องทุกตัว (ออนไลน์/ออฟไลน์, FPS, อุณหภูมิ CPU, Outbox Pending, Sync Version)
-     * **ข้อมูลพนักงาน (Users):** จัดการข้อมูลพนักงาน, กำหนดวันเริ่มงาน - วันสิ้นสุดสัญญาจ้าง (ระงับสิทธิ์สแกนหน้าอัตโนมัติเมื่อหมดสัญญา)
-     * **คิวลงทะเบียนใบหน้า (Enrollment Jobs):** สร้างคำขอลงทะเบียนใบหน้าจากส่วนกลาง (อัปโหลด 1-5 ภาพ) ส่งให้ Kiosk ประมวลผลและสร้าง Embedding เฉลี่ย
-     * **ประวัติการลงเวลา (Attendance):** รายการลงเวลาย้อนหลัง, กรองตามวันที่/แผนก, และส่งออกรายงานเป็นไฟล์ CSV
+     * **รายการอุปกรณ์ (Devices):** ดูสถานะสดและที่อยู่ IP ของกล้องทุกตัว (ออนไลน์/ออฟไลน์, ที่อยู่ IP, FPS, อุณหภูมิ CPU, Outbox Pending) พร้อมระบบลงทะเบียนเครื่องใหม่และออก API Key
+     * **ข้อมูลพนักงาน (Users):** จัดการข้อมูลพนักงาน, แยกแสดงวันเริ่มงานและวันสิ้นสุดสัญญาจ้างชัดเจน, พร้อมปุ่มลงทะเบียน/อัปเดตใบหน้า (อัปโหลด 1-5 ภาพส่งไปสร้าง Embedding บนชิป Hailo-8) ภายในหน้าเดียว
+     * **ประวัติการลงเวลา (Attendance):** บันทึกประวัติเวลาเข้า-ออกงาน, คำนวณชั่วโมงทำงานรวม, กรองตามเครื่องสแกนและช่วงวันที่, และส่งออกรายงานเป็นไฟล์ CSV
      * **บันทึกประวัติการใช้งาน (Audit Log):** บันทึกประวัติการกระทำของผู้ดูแลระบบทั้งหมดเพื่อความโปร่งใส
-     * **จัดการผู้ดูแลระบบ (Admins Management):** เพิ่ม/แก้ไข/ลบ บัญชีผู้ดูแลระบบ พร้อมระบบ **เปิด-ปิดสิทธิ์การเข้าถึงแต่ละเมนูได้อย่างอิสระ (Granular Menu Permissions)** รายบุคคล และระบบเปลี่ยนรหัสผ่านของตนเอง
+     * **จัดการผู้ดูแลระบบ (Admins Management):** เพิ่ม/แก้ไข/ลบ บัญชีผู้ดูแลระบบ พร้อมระบบ **เปิด-ปิดสิทธิ์การเข้าถึงแต่ละเมนูได้อย่างอิสระ (Granular Menu Permissions)** รายบุคคล
+     * **การตั้งค่าระบบและบัญชี (Settings):** เข้าถึงผ่านไอคอนฟันเฟือง ⚙️ ข้างบทบาทผู้ดูแลระบบ รวมศูนย์การเปลี่ยนรหัสผ่านของตนเอง และการตั้งค่าเวลาเข้า-ออกงานมาตรฐาน, ชั่วโมงขั้นต่ำ, และเกณฑ์ความแม่นยำใบหน้า (Cosine Threshold)
    * **ความเรียบง่ายและเป็นทางการ:** ส่วนติดต่อผู้ใช้เป็นภาษาไทยล้วน ปราศจากสัญลักษณ์อิโมจิและคำศัพท์ภาษาอังกฤษในวงเล็บ เข้าถึงผ่านเส้นทางตรง `/login`
 
 ---
@@ -277,11 +280,14 @@ npm run dev
 | **Contract Period Control** | เพิ่ม `start_date` และ `end_date` พร้อมระงับสิทธิ์ที่เซิร์ฟเวอร์ | พนักงานที่ยังไม่เริ่มงานหรือหมดสัญญาจะถูกระงับการสแกนหน้าอัตโนมัติ โดยข้อมูลยังคงอยู่ในระบบเพื่อต่อสัญญา |
 | **Granular Menu Permissions** | ระบบสิทธิ์ผู้ดูแลแดชบอร์ดแบบเลือกเปิด-ปิดเมนูอิสระ (RBAC) | กำหนดสิทธิ์รายบุคคลผ่าน Checkbox ป้องกันระดับ Go Middleware (`403 Forbidden`) พร้อมฟังก์ชันเปลี่ยนรหัสผ่าน |
 | **Routing & UI Modernization** | ปรับเส้นทางเข้าสู่ระบบตรงที่ `/login` และทำความสะอาดภาษา | เว็บไซต์สะอาดตา เป็นทางการ ไร้อิโมจิและวงเล็บภาษาอังกฤษ ตอบสนองรวดเร็ว |
+| **Dashboard Realtime Update** | สตรีมข้อมูลสดผ่าน Server-Sent Events (SSE) `/api/realtime/stream` | อัปเดตสถิติและเหตุการณ์ลงเวลาทันทีแบบ Real-time โดยไม่ต้อง Polling ถี่ๆ ลดโหลดฐานข้อมูล |
+| **Kiosk Systemd Service** | ไฟล์ `attendance-kiosk.service` และสคริปต์ติดตั้งอัตโนมัติ | รันแอป Kiosk ทันทีเมื่อเปิดเครื่อง Raspberry Pi พร้อม Auto-restart หากแอปปิดตัวลง |
+| **Rate Limiting Middleware** | In-Memory Token Bucket ใน Go Gin | ป้องกันการโจมตี Brute-force และ Request Flooding (20 req/s, burst 40) พร้อมข้อยกเว้นสำหรับ Device API Key |
+| **Device IP Auto-Detection** | ตรวจจับและบันทึก IP ของเครื่อง Kiosk อัตโนมัติจาก Heartbeat และ Request | แอดมินตรวจสอบที่อยู่ IP ของเครื่องสแกนทุกจุดผ่านแดชบอร์ดได้ทันที แม้เครื่องย้าย Wi-Fi |
+| **Dynamic Work Time Settings** | หน้าต่างตั้งค่าระบบและบัญชีผู้ใช้รวมศูนย์ผ่านไอคอนฟันเฟือง ⚙️ | ปรับเวลาเข้า-ออกงานมาตรฐาน, ชม. ขั้นต่ำ และเกณฑ์ Cosine Threshold ใบหน้าผ่านหน้าเว็บได้โดยไม่ต้องแก้โค้ด |
+| **Touchless Kiosk Lockdown** | โหมดไร้สัมผัส Frameless Kiosk Lock + Auto-Hide Cursor | ล็อกหน้าจอเต็มจอห้ามปัด/ย่อหลุดไป Desktop, เพิกเฉยต่อการแตะจอ, และซ่อนลูกศรเมาส์อัตโนมัติเมื่ออยู่นิ่ง |
 
 ### ⚪ แผนพัฒนาเพิ่มเติม (Future Enhancements)
 
-| # | ข้อเสนอแนะ | รายละเอียด |
-|---|---|---|
-| 1 | **Dashboard Realtime Update** | เพิ่ม WebSocket หรือ SSE ให้แดชบอร์ดอัปเดตสถิติโดยไม่ต้องส่ง Poll Request |
-| 2 | **Kiosk Systemd Service** | เพิ่มไฟล์ `.service` สำหรับรัน Kiosk อัตโนมัติเมื่อเปิดเครื่อง Raspberry Pi |
-| 3 | **Rate Limiting Middleware** | เพิ่ม In-Memory Token Bucket ใน Gin สำหรับจำกัดความถี่ Request ของแดชบอร์ด |
+- [ ] รองรับการแจ้งเตือนพนักงานผ่าน LINE Notify / Telegram เมื่อมีการสแกนบันทึกเวลา
+- [ ] เพิ่มระบบสำรองฐานข้อมูล PostgreSQL อัตโนมัติไปยัง Cloud Storage / S3

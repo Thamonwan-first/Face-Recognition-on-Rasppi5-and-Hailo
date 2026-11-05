@@ -49,9 +49,9 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
 
-  // State สำหรับ Modal ลงทะเบียนใบหน้า
-  const [enrollUser, setEnrollUser] = useState(null);
+  // State สำหรับรูปถ่ายใบหน้า (แนบตอนสร้าง หรือแก้ไขพนักงาน)
   const [imageFiles, setImageFiles] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // State ค้นหาพนักงาน
   const [searchUser, setSearchUser] = useState('');
@@ -62,71 +62,27 @@ export default function UsersPage() {
     queryFn: () => api.get('/api/users'),
   });
 
-  // Mutation เพิ่มพนักงาน
-  const createUserMutation = useMutation({
-    mutationFn: (newUser) => api.post('/api/users', newUser),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      setShowUserModal(false);
-      setFormData(INITIAL_FORM);
-    },
-    onError: (err) => {
-      alert('เกิดข้อผิดพลาดในการเพิ่มพนักงาน: ' + (err.message || err));
-    },
-  });
-
-  // Mutation แก้ไขพนักงาน
-  const updateUserMutation = useMutation({
-    mutationFn: ({ id, data }) => api.put(`/api/users/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      setEditUser(null);
-      setShowUserModal(false);
-      setFormData(INITIAL_FORM);
-    },
-    onError: (err) => {
-      alert('เกิดข้อผิดพลาดในการแก้ไขพนักงาน: ' + (err.message || err));
-    },
-  });
-
   // Mutation ลบพนักงาน
   const deleteUserMutation = useMutation({
     mutationFn: (id) => api.del(`/api/users/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
-  });
-
-  // Mutation อัปโหลดรูปภาพลงทะเบียนใบหน้า
-  const uploadEnrollmentMutation = useMutation({
-    mutationFn: async () => {
-      const form = new FormData();
-      form.append('user_id', enrollUser.id);
-      for (const file of imageFiles) {
-        form.append('images', file);
-      }
-      return api.post('/api/enrollment', form, true);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['enrollment_jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      alert(`ส่งภาพ (${imageFiles.length} รูป) ไปยังตู้ Kiosk สำเร็จ! ชิป AI กำลังคำนวณเวกเตอร์ใบหน้าเฉลี่ยและจะลบรูปทิ้งอัตโนมัติ`);
-      setEnrollUser(null);
-      setImageFiles([]);
-    },
     onError: (err) => {
-      alert('เกิดข้อผิดพลาดในการส่งรูปภาพ: ' + (err.message || 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้'));
+      alert('เกิดข้อผิดพลาดในการลบพนักงาน: ' + (err.message || err));
     },
   });
 
   const openCreateModal = () => {
     setEditUser(null);
     setFormData(INITIAL_FORM);
+    setImageFiles([]);
     setShowUserModal(true);
   };
 
   const openEditModal = (u) => {
     setEditUser(u);
+    setImageFiles([]);
 
     // แกะคำนำหน้า ชื่อ นามสกุล หากยังไม่มีฟิลด์แยก
     let title = u.title || '';
@@ -158,46 +114,6 @@ export default function UsersPage() {
     setShowUserModal(true);
   };
 
-  const handleUserSubmit = (e) => {
-    e.preventDefault();
-    const prefix = formData.title ? `${formData.title} ` : '';
-    const fullName = `${prefix}${formData.first_name} ${formData.last_name}`.trim();
-    const payload = {
-      employee_id: formData.employee_id.trim(),
-      title: formData.title,
-      first_name: formData.first_name.trim(),
-      last_name: formData.last_name.trim(),
-      name: fullName,
-      department: formData.department,
-      status: formData.status,
-      start_date: formData.start_date || null,
-      end_date: formData.end_date || null,
-    };
-
-    if (editUser) {
-      updateUserMutation.mutate({
-        id: editUser.id,
-        data: {
-          ...payload,
-          version: editUser.version,
-        },
-      });
-    } else {
-      createUserMutation.mutate(payload);
-    }
-  };
-
-  const handleDelete = (id, name) => {
-    if (window.confirm(`ยืนยันการลบผู้ใช้ "${name}"? ข้อมูลเวกเตอร์ใบหน้าจะถูกลบออกจาก Server และตู้ Kiosk ทั้งหมดทันที`)) {
-      deleteUserMutation.mutate(id);
-    }
-  };
-
-  const openEnrollModal = (u) => {
-    setEnrollUser(u);
-    setImageFiles([]);
-  };
-
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length > 5) {
@@ -208,14 +124,75 @@ export default function UsersPage() {
     }
   };
 
-  const handleEnrollSubmit = (e) => {
+  const handleUserSubmit = async (e) => {
     e.preventDefault();
-    if (!enrollUser) return;
-    if (imageFiles.length === 0) {
-      alert('กรุณาเลือกรูปถ่ายอย่างน้อย 1 รูป (แนะนำ 3-5 รูป)');
+    if (!formData.first_name.trim()) {
+      alert('กรุณากรอกชื่อพนักงาน');
       return;
     }
-    uploadEnrollmentMutation.mutate();
+
+    const prefix = formData.title ? `${formData.title} ` : '';
+    const fullName = `${prefix}${formData.first_name.trim()} ${formData.last_name.trim()}`.trim();
+    const payload = {
+      employee_id: formData.employee_id.trim() || null,
+      title: formData.title,
+      first_name: formData.first_name.trim(),
+      last_name: formData.last_name.trim(),
+      name: fullName,
+      department: formData.department,
+      status: formData.status,
+      start_date: formData.start_date || null,
+      end_date: formData.end_date || null,
+    };
+
+    setIsSubmitting(true);
+    try {
+      let targetUserId = editUser ? editUser.id : null;
+      if (editUser) {
+        await api.put(`/api/users/${editUser.id}`, {
+          ...payload,
+          version: editUser.version,
+        });
+      } else {
+        const created = await api.post('/api/users', payload);
+        targetUserId = created?.id;
+      }
+
+      // หากมีรูปภาพแนบมา ให้ส่งคำขอ Enrollment ไปคำนวณเวกเตอร์ใบหน้าบนตู้ Kiosk
+      if (imageFiles.length > 0 && targetUserId) {
+        const form = new FormData();
+        form.append('user_id', targetUserId);
+        for (const file of imageFiles) {
+          form.append('images', file);
+          form.append('image', file);
+        }
+        await api.post('/api/enrollment', form, true);
+        alert(
+          editUser
+            ? `บันทึกข้อมูลและส่งภาพถ่าย (${imageFiles.length} รูป) ไปคำนวณเวกเตอร์ใบหน้าเฉลี่ยบนตู้ Kiosk เรียบร้อยแล้ว!`
+            : `เพิ่มพนักงานและส่งภาพถ่าย (${imageFiles.length} รูป) ไปคำนวณเวกเตอร์ใบหน้าเฉลี่ยบนตู้ Kiosk เรียบร้อยแล้ว!`
+        );
+      } else {
+        alert(editUser ? 'บันทึกการแก้ไขพนักงานเรียบร้อยแล้ว' : 'เพิ่มพนักงานใหม่เรียบร้อยแล้ว');
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['enrollment_jobs'] });
+      setShowUserModal(false);
+      setEditUser(null);
+      setImageFiles([]);
+      setFormData(INITIAL_FORM);
+    } catch (err) {
+      alert('เกิดข้อผิดพลาด: ' + (err.message || 'ไม่สามารถดำเนินการได้'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = (id, name) => {
+    if (window.confirm(`ยืนยันการลบผู้ใช้ "${name}"? ข้อมูลเวกเตอร์ใบหน้าจะถูกลบออกจาก Server และตู้ Kiosk ทั้งหมดทันที`)) {
+      deleteUserMutation.mutate(id);
+    }
   };
 
   // กรองรายชื่อพนักงานตามช่องค้นหา
@@ -261,9 +238,10 @@ export default function UsersPage() {
               <th>คำนำหน้า</th>
               <th>ชื่อ-นามสกุล</th>
               <th>ฝ่าย</th>
-              <th>ช่วงสัญญาปฏิบัติงาน</th>
+              <th>วันเริ่มงาน</th>
+              <th>วันสิ้นสุดสัญญา</th>
               <th>สถานะผู้ใช้</th>
-              <th>ข้อมูลใบหน้า</th>
+              <th>สถานะใบหน้า</th>
               <th>จัดการ</th>
             </tr>
           </thead>
@@ -287,6 +265,10 @@ export default function UsersPage() {
                 }
               }
 
+              // ตรวจสอบว่าหมดสัญญาจ้างหรือยัง (end_date ก่อนวันนี้)
+              const isContractExpired =
+                u.end_date && new Date(u.end_date) < new Date(new Date().setHours(0, 0, 0, 0));
+
               return (
                 <tr key={u.id}>
                   <td>
@@ -299,72 +281,85 @@ export default function UsersPage() {
                   </td>
                   <td>{displayName || u.name}</td>
                   <td>{u.department || '-'}</td>
+                  <td>{formatThaiDate(u.start_date)}</td>
                   <td>
-                    <div style={{ fontSize: '0.85rem' }}>
-                      <div>เริ่ม: {formatThaiDate(u.start_date)}</div>
-                      {u.end_date ? (
-                        <div>สิ้นสุด: {formatThaiDate(u.end_date)}</div>
-                      ) : (
-                        <div style={{ color: 'var(--text-muted)' }}>พนักงานประจำ</div>
-                      )}
-                    </div>
+                    {u.end_date ? (
+                      formatThaiDate(u.end_date)
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>พนักงานประจำ</span>
+                    )}
                   </td>
                   <td>
-                    <StatusBadge status={u.status} />
+                    {isContractExpired ? (
+                      <span className="badge badge-offline">ระงับ (หมดสัญญา)</span>
+                    ) : (
+                      <StatusBadge status={u.status} />
+                    )}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      {u.has_face ? (
-                        <>
-                          <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                            มีข้อมูลใบหน้า
-                          </span>
-                          <button
-                            onClick={() => openEnrollModal(u)}
-                            className="btn"
-                            title="อัปเดตรูปถ่ายใบหน้าใหม่"
-                            style={{
-                              padding: '0.2rem 0.5rem',
-                              fontSize: '0.75rem',
-                              background: '#e0f2fe',
-                              color: '#0369a1',
-                              borderRadius: '4px',
-                              border: '1px solid #bae6fd',
-                            }}
-                          >
-                            อัปเดตใบหน้า
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            ยังไม่ลงทะเบียน
-                          </span>
-                          <button
-                            onClick={() => openEnrollModal(u)}
-                            className="btn btn-primary"
-                            style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
-                          >
-                            ลงทะเบียนใบหน้า
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    {u.has_face ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          background: '#dcfce7',
+                          color: '#15803d',
+                          border: '1px solid #bbf7d0',
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }}></span>
+                        ลงทะเบียนแล้ว
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          background: '#f1f5f9',
+                          color: '#64748b',
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#94a3b8' }}></span>
+                        ยังไม่ลงทะเบียน
+                      </span>
+                    )}
                   </td>
-                  <td>v{u.version}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.4rem' }}>
                       <button
                         onClick={() => openEditModal(u)}
                         className="btn"
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: 'var(--warning)', color: '#000' }}
+                        style={{
+                          padding: '0.3rem 0.65rem',
+                          fontSize: '0.8rem',
+                          background: '#f3f4f6',
+                          color: '#374151',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                        }}
                       >
                         แก้ไข
                       </button>
                       <button
-                        onClick={() => handleDelete(u.id, u.name)}
+                        onClick={() => handleDelete(u.id, displayName || u.name)}
                         className="btn btn-danger"
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                        style={{
+                          padding: '0.3rem 0.65rem',
+                          fontSize: '0.8rem',
+                          borderRadius: '6px',
+                        }}
+                        disabled={deleteUserMutation.isPending}
                       >
                         ลบ
                       </button>
@@ -375,7 +370,7 @@ export default function UsersPage() {
             })}
             {filteredUsers?.length === 0 && (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>
+                <td colSpan="9" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>
                   ไม่พบข้อมูลผู้ใช้ในระบบ
                 </td>
               </tr>
@@ -510,70 +505,33 @@ export default function UsersPage() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUserModal(false);
-                    setEditUser(null);
-                  }}
-                  className="btn"
-                  style={{ background: '#eee', color: '#333' }}
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={createUserMutation.isPending || updateUserMutation.isPending}
-                >
-                  {createUserMutation.isPending || updateUserMutation.isPending ? 'กำลังบันทึก...' : 'บันทึก'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 2: ลงทะเบียน / อัปเดตรูปถ่ายใบหน้า */}
-      {enrollUser && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div className="login-card" style={{ maxWidth: '500px', width: '90%' }}>
-            <h3 style={{ marginBottom: '0.5rem' }}>
-              ลงทะเบียนใบหน้าพนักงาน
-            </h3>
-            <p style={{ fontSize: '0.95rem', color: 'var(--primary)', fontWeight: 'bold', marginBottom: '1rem' }}>
-              พนักงาน: {enrollUser.employee_id ? `[${enrollUser.employee_id}] ` : ''}{enrollUser.name} ({enrollUser.department || 'ไม่ระบุฝ่าย'})
-            </p>
-
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: '1.4' }}>
-              * กรุณาเลือกรูปถ่ายใบหน้า <strong>1 ถึง 5 รูป</strong> (แนะนำมุมหน้าตรงและเอียงเล็กน้อย) ภาพจะถูกส่งไปยังชิป AI บน Kiosk เพื่อแปลงเป็นเวกเตอร์ใบหน้าเฉลี่ย และ <strong>ลบไฟล์ภาพถ่ายทิ้งทันที</strong> ตามกฎหมาย PDPA
-            </p>
-
-            <form onSubmit={handleEnrollSubmit}>
-              <div className="form-group">
-                <label>เลือกภาพถ่ายใบหน้า (สูงสุด 5 รูป)</label>
+              {/* ส่วนลงทะเบียน / อัปเดตภาพถ่ายใบหน้า */}
+              <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <label style={{ fontWeight: 600, fontSize: '0.9rem', margin: 0 }}>
+                    ข้อมูลและภาพถ่ายใบหน้า
+                  </label>
+                  {editUser && (
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: editUser.has_face ? '#16a34a' : '#64748b' }}>
+                      {editUser.has_face ? '🟢 ลงทะเบียนแล้ว' : '⚪ ยังไม่ลงทะเบียน'}
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem', lineHeight: '1.4' }}>
+                  {editUser?.has_face
+                    ? 'หากต้องการเปลี่ยนรูปใบหน้า สามารถเลือกรูปถ่ายใหม่ 1–5 รูป (ภาพจะส่งไปคำนวณเวกเตอร์เฉลี่ยบน Kiosk และลบทิ้งทันทีตาม PDPA)'
+                    : 'เลือกรูปถ่ายใบหน้า 1–5 รูป เพื่อลงทะเบียนเข้าสู่ระบบ (สามารถแนบตอนนี้หรืออัปเดตภายหลังได้)'}
+                </p>
                 <input
                   type="file"
                   accept="image/*"
                   multiple
                   className="input-field"
                   onChange={handleFileChange}
-                  required
                 />
                 {imageFiles.length > 0 && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--primary)', marginTop: '0.4rem', fontWeight: 'bold' }}>
-                    เลือกแล้ว {imageFiles.length} รูป (สูงสุด 5 รูป)
+                    ✓ เลือกรูปถ่ายแล้ว {imageFiles.length} รูป (จะส่งประมวลผลเมื่อกดบันทึก)
                   </p>
                 )}
               </div>
@@ -582,7 +540,8 @@ export default function UsersPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setEnrollUser(null);
+                    setShowUserModal(false);
+                    setEditUser(null);
                     setImageFiles([]);
                   }}
                   className="btn"
@@ -593,9 +552,9 @@ export default function UsersPage() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={uploadEnrollmentMutation.isPending || imageFiles.length === 0}
+                  disabled={isSubmitting}
                 >
-                  {uploadEnrollmentMutation.isPending ? 'กำลังอัปโหลด...' : `ส่งประมวลผล (${imageFiles.length} รูป)`}
+                  {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
                 </button>
               </div>
             </form>

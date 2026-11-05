@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ProtectedRoute from './components/ProtectedRoute';
+import { useRealtime } from './hooks/useRealtime';
 import LoginPage from './pages/LoginPage';
 import DevicesPage from './pages/DevicesPage';
 import UsersPage from './pages/UsersPage';
@@ -9,8 +10,12 @@ import EnrollmentPage from './pages/EnrollmentPage';
 import AttendancePage from './pages/AttendancePage';
 import AuditPage from './pages/AuditPage';
 import AdminsPage from './pages/AdminsPage';
+import SettingsPage from './pages/SettingsPage';
 
 function DashboardLayout() {
+  // Activate Server-Sent Events (SSE) for instant real-time data push
+  useRealtime();
+
   return (
     <div className="app-container">
       <Sidebar />
@@ -23,6 +28,7 @@ function DashboardLayout() {
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/admins" element={<AdminsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/devices" replace />} />
         </Routes>
       </main>

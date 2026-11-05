@@ -1,0 +1,23 @@
+[Unit]
+Description=Face Recognition Attendance Kiosk (Raspberry Pi 5 + Hailo-8)
+After=network-online.target graphical.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%u
+WorkingDirectory=%h/Face-Recognition-on-Rasppi5-and-Hailo/kiosk
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=QT_QPA_PLATFORM=xcb
+ExecStartPre=/bin/sleep 2
+ExecStart=%h/Face-Recognition-on-Rasppi5-and-Hailo/kiosk/venv/bin/python main.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=attendance-kiosk
+
+[Install]
+WantedBy=graphical.target

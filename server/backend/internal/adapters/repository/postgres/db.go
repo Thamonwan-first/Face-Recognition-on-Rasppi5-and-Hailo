@@ -68,10 +68,14 @@ func createSchema(db *sql.DB) error {
 		direction VARCHAR(32) DEFAULT 'AUTO',
 		api_key_hash VARCHAR(255) NOT NULL,
 		status VARCHAR(32) DEFAULT 'offline',
+		ip_address VARCHAR(64),
 		last_seen TIMESTAMPTZ,
 		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
 		revoked_at TIMESTAMPTZ
 	);
+
+	-- Migration: ensure ip_address column exists on devices table
+	ALTER TABLE devices ADD COLUMN IF NOT EXISTS ip_address VARCHAR(64);
 
 	CREATE TABLE IF NOT EXISTS device_state (
 		device_id VARCHAR(64) PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
@@ -136,9 +140,15 @@ func createSchema(db *sql.DB) error {
 		work_date DATE NOT NULL,
 		hours_worked DOUBLE PRECISION,
 		status VARCHAR(32) DEFAULT 'open',
+		is_manual BOOLEAN DEFAULT FALSE,
+		adjustment_reason TEXT DEFAULT '',
 		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);
+
+	-- Migration: ensure is_manual and adjustment_reason columns exist
+	ALTER TABLE attendance_pairs ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT FALSE;
+	ALTER TABLE attendance_pairs ADD COLUMN IF NOT EXISTS adjustment_reason TEXT DEFAULT '';
 
 	CREATE TABLE IF NOT EXISTS enrollment_jobs (
 		id VARCHAR(64) PRIMARY KEY,
@@ -159,6 +169,12 @@ func createSchema(db *sql.DB) error {
 		target_id VARCHAR(64),
 		detail TEXT,
 		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS system_settings (
+		key VARCHAR(64) PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);
 
 	-- Performance Indexes for O(1) and O(log N) lookups
@@ -215,6 +231,18 @@ func seedDefaults(db *sql.DB) error {
 			"INSERT INTO device_state (device_id, applied_version, model_version, sw_version, updated_at) VALUES ($1, 0, '', '', CURRENT_TIMESTAMP) ON CONFLICT(device_id) DO NOTHING",
 			"kiosk-01",
 		)
+	}
+
+	// 3. Seed Default System Settings
+	defaultSettings := map[string]string{
+		"work_start_time":       "08:30",
+		"work_end_time":         "17:30",
+		"min_work_hours":        "8.0",
+		"debounce_seconds":      "60",
+		"recognition_threshold": "0.65",
+	}
+	for k, v := range defaultSettings {
+		_, _ = db.Exec("INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO NOTHING", k, v)
 	}
 
 	return nil

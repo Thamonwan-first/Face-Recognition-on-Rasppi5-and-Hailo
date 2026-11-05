@@ -113,7 +113,8 @@ class AttendanceSuccessPopup(QDialog):
         QTimer.singleShot(2500, self.close)
 
     def mousePressEvent(self, event):
-        self.close()
+        # โหมดไร้สัมผัส: เพิกเฉยต่อการแตะจอ เพื่อไม่ให้ปิดป๊อปอัปก่อนครบเวลา
+        event.ignore()
 
 
 class MainWindow(QMainWindow):
@@ -136,14 +137,52 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Face Attendance Kiosk")
         self.setStyleSheet(f"background-color: {DARK_BG}; color: {TEXT_PRIMARY};")
 
+        # Kiosk Lock: ไร้ขอบหน้าต่าง ล็อกให้อยู่บนสุดเสมอ ป้องกันคนปัดหรือย่อหน้าต่าง
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+
         if config.fullscreen:
             self.showFullScreen()
         else:
             self.setFixedSize(config.display_width, config.display_height)
 
+        # Auto-hide Cursor: ซ่อนเมาส์ไม่ให้เกะกะ แต่ถ้าขยับเมาส์จะปรากฏ และซ่อนตัวเมื่อนิ่งเกิน 3 วินาที
+        self.setMouseTracking(True)
+        self.setCursor(Qt.BlankCursor)
+        self._cursor_timer = QTimer(self)
+        self._cursor_timer.setSingleShot(True)
+        self._cursor_timer.timeout.connect(self._hide_cursor)
+
         self._build_ui()
         self._start_clock()
         self._start_worker()
+
+    def mouseMoveEvent(self, event):
+        # เมื่อมีการขยับเมาส์ ให้แสดงเคอร์เซอร์ขึ้นมา และเริ่มนับเวลาถอยหลัง 3 วินาที
+        self.unsetCursor()
+        self._cursor_timer.start(3000)
+        super().mouseMoveEvent(event)
+
+    def _hide_cursor(self):
+        self.setCursor(Qt.BlankCursor)
+
+    def mousePressEvent(self, event):
+        # เพิกเฉยต่อการแตะ/คลิกหน้าจอ ป้องกันคนแตะเล่น
+        event.ignore()
+
+    def mouseReleaseEvent(self, event):
+        event.ignore()
+
+    def mouseDoubleClickEvent(self, event):
+        event.ignore()
+
+    def keyPressEvent(self, event):
+        # ปุ่มลับเฉพาะแอดมิน: Ctrl + Q สำหรับปิดโปรแกรม
+        if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_Q:
+            logger.info("Admin exit shortcut (Ctrl+Q) triggered.")
+            self.close()
+        else:
+            # เพิกเฉยต่อปุ่มอื่นๆ เช่น ESC, F11, Spacebar เพื่อไม่ให้หลุดออกจากหน้าต่างเต็มจอ
+            event.ignore()
 
     def _build_ui(self):
         central = QWidget()

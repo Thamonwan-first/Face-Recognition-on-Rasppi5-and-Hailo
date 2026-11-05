@@ -158,7 +158,13 @@ func (r *auditRepo) Log(ctx context.Context, log *entity.AuditLog) error {
 }
 
 func (r *auditRepo) List(ctx context.Context, limit int) ([]*entity.AuditLog, error) {
-	query := "SELECT id, admin_id, action, target_type, target_id, detail, created_at FROM audit_log ORDER BY created_at DESC LIMIT $1"
+	query := `
+	SELECT l.id, l.admin_id, COALESCE(a.username, l.admin_id, 'System') as admin_username,
+	       l.action, l.target_type, l.target_id, l.detail, l.created_at
+	FROM audit_log l
+	LEFT JOIN admins a ON l.admin_id = a.id
+	ORDER BY l.created_at DESC LIMIT $1
+	`
 	rows, err := r.db.QueryContext(ctx, query, limit)
 	if err != nil {
 		return nil, err
@@ -168,13 +174,14 @@ func (r *auditRepo) List(ctx context.Context, limit int) ([]*entity.AuditLog, er
 	var logs []*entity.AuditLog
 	for rows.Next() {
 		var l entity.AuditLog
-		var adminID, targetType, targetID, detail sql.NullString
-		if err := rows.Scan(&l.ID, &adminID, &l.Action, &targetType, &targetID, &detail, &l.CreatedAt); err != nil {
+		var adminID, adminUsername, targetType, targetID, detail sql.NullString
+		if err := rows.Scan(&l.ID, &adminID, &adminUsername, &l.Action, &targetType, &targetID, &detail, &l.CreatedAt); err != nil {
 			return nil, err
 		}
 		if adminID.Valid {
 			l.AdminID = &adminID.String
 		}
+		l.AdminUsername = adminUsername.String
 		l.TargetType = targetType.String
 		l.TargetID = targetID.String
 		l.Detail = detail.String

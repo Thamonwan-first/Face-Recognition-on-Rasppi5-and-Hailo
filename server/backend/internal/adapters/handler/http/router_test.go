@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	handlerHttp "attendance-backend/internal/adapters/handler/http"
 	"attendance-backend/internal/entity"
+	"attendance-backend/internal/pkg/broker"
 	"attendance-backend/internal/pkg/hasher"
+	"attendance-backend/internal/pkg/ratelimit"
 	"attendance-backend/internal/pkg/token"
 	"attendance-backend/internal/usecase"
 )
@@ -102,6 +105,13 @@ func (m *mockDeviceRepo) UpdateStatus(ctx context.Context, id string, status str
 	return nil
 }
 
+func (m *mockDeviceRepo) UpdateIPAddress(ctx context.Context, id string, ip string) error {
+	if m.device != nil && m.device.ID == id {
+		m.device.IPAddress = ip
+	}
+	return nil
+}
+
 func (m *mockDeviceRepo) UpdateState(ctx context.Context, state *entity.DeviceState) error {
 	return nil
 }
@@ -155,8 +165,16 @@ func (m *mockAttendanceRepo) GetEventByID(ctx context.Context, eventID string) (
 func (m *mockAttendanceRepo) ListEvents(ctx context.Context, limit int) ([]*entity.AttendanceEvent, error) {
 	return nil, nil
 }
-func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department string, limit int) ([]*entity.AttendancePair, error) {
+func (m *mockAttendanceRepo) ListPairs(ctx context.Context, startDate, endDate, userID, department, deviceID string, limit int) ([]*entity.AttendancePair, error) {
 	return m.pairs, nil
+}
+func (m *mockAttendanceRepo) GetPairByID(ctx context.Context, id int) (*entity.AttendancePair, error) {
+	for _, p := range m.pairs {
+		if p.ID == id {
+			return p, nil
+		}
+	}
+	return nil, entity.ErrNotFound
 }
 func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
 	return nil, entity.ErrNotFound
@@ -193,6 +211,28 @@ func (m *mockAuditRepo) List(ctx context.Context, limit int) ([]*entity.AuditLog
 	return nil, nil
 }
 
+type mockSettingsRepo struct {
+	settings *entity.SystemSettings
+}
+
+func (m *mockSettingsRepo) GetSettings(ctx context.Context) (*entity.SystemSettings, error) {
+	if m.settings == nil {
+		m.settings = &entity.SystemSettings{
+			WorkStartTime:        "08:30",
+			WorkEndTime:          "17:30",
+			MinWorkHours:         8.0,
+			DebounceSeconds:      60,
+			RecognitionThreshold: 0.65,
+		}
+	}
+	return m.settings, nil
+}
+
+func (m *mockSettingsRepo) UpdateSettings(ctx context.Context, s *entity.SystemSettings) error {
+	m.settings = s
+	return nil
+}
+
 func setupTestServer() *httptest.Server {
 	adminHash, _ := hasher.HashPassword("admin1234")
 	adminRepo := &mockAdminRepo{
@@ -219,25 +259,31 @@ func setupTestServer() *httptest.Server {
 	attendanceRepo := &mockAttendanceRepo{}
 	enrollmentRepo := &mockEnrollmentRepo{}
 	auditRepo := &mockAuditRepo{}
+	settingsRepo := &mockSettingsRepo{}
 
 	tokenMaker := token.NewTokenMaker("test-secret-key-1234567890")
 
 	authUC := usecase.NewAuthUseCase(adminRepo, auditRepo, tokenMaker)
 	deviceUC := usecase.NewDeviceUseCase(deviceRepo, auditRepo)
 	userUC := usecase.NewUserUseCase(userRepo, auditRepo)
-	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo)
+	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo, auditRepo, userRepo, settingsRepo)
 	syncUC := usecase.NewSyncUseCase(deviceRepo, userRepo, attendanceUC, enrollmentRepo)
 	enrollmentUC := usecase.NewEnrollmentUseCase(enrollmentRepo, userRepo, "data/test_enrollment")
 	auditUC := usecase.NewAuditUseCase(auditRepo)
+	settingsUC := usecase.NewSettingsUseCase(settingsRepo, auditRepo)
+
+	brokerInst := broker.NewEventBroker()
 
 	handlers := &handlerHttp.Handlers{
 		Auth:       handlerHttp.NewAuthHandler(authUC),
 		User:       handlerHttp.NewUserHandler(userUC),
 		Attendance: handlerHttp.NewAttendanceHandler(attendanceUC),
-		Device:     handlerHttp.NewDeviceHandler(deviceUC),
-		Sync:       handlerHttp.NewSyncHandler(syncUC),
-		Enrollment: handlerHttp.NewEnrollmentHandler(enrollmentUC),
+		Device:     handlerHttp.NewDeviceHandler(deviceUC, brokerInst),
+		Sync:       handlerHttp.NewSyncHandler(syncUC, brokerInst),
+		Enrollment: handlerHttp.NewEnrollmentHandler(enrollmentUC, brokerInst),
 		Audit:      handlerHttp.NewAuditHandler(auditUC),
+		Realtime:   handlerHttp.NewRealtimeHandler(brokerInst),
+		Settings:   handlerHttp.NewSettingsHandler(settingsUC, brokerInst),
 	}
 
 	router := handlerHttp.SetupRouter(handlers, tokenMaker, deviceUC)
@@ -342,5 +388,236 @@ func TestHTTP_DeviceAuth(t *testing.T) {
 	defer respAuth.Body.Close()
 	if respAuth.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 with valid device API key, got %d", respAuth.StatusCode)
+	}
+}
+
+func TestHTTP_RealtimeSSE(t *testing.T) {
+	ts := setupTestServer()
+	defer ts.Close()
+
+	// 1. Without token -> 401
+	resp, err := http.Get(ts.URL + "/api/realtime/stream")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	// 2. Login to get token
+	loginBody, _ := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "admin1234",
+	})
+	loginRespRaw, _ := http.Post(ts.URL+"/api/auth/login", "application/json", bytes.NewBuffer(loginBody))
+	var loginResp struct {
+		AccessToken string `json:"access_token"`
+	}
+	json.NewDecoder(loginRespRaw.Body).Decode(&loginResp)
+	loginRespRaw.Body.Close()
+
+	// 3. Connect to SSE stream using query parameter ?token=
+	req, _ := http.NewRequest("GET", ts.URL+"/api/realtime/stream?token="+loginResp.AccessToken, nil)
+	client := &http.Client{Timeout: 2 * time.Second}
+	sseResp, err := client.Do(req)
+	if err != nil {
+		// client timeout is normal for infinite stream
+		return
+	}
+	defer sseResp.Body.Close()
+
+	if sseResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for SSE stream, got %d", sseResp.StatusCode)
+	}
+	if contentType := sseResp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/event-stream") {
+		t.Fatalf("expected text/event-stream, got %s", contentType)
+	}
+}
+
+func TestHTTP_RateLimiter(t *testing.T) {
+	// Setup test server with tight rate limiter (1 req/sec, burst 2)
+	adminHash, _ := hasher.HashPassword("admin1234")
+	adminRepo := &mockAdminRepo{
+		admin: &entity.Admin{
+			ID:           "test-admin-id",
+			Username:     "admin",
+			PasswordHash: adminHash,
+			Role:         "admin",
+		},
+	}
+	deviceRepo := &mockDeviceRepo{}
+	userRepo := &mockUserRepo{}
+	attendanceRepo := &mockAttendanceRepo{}
+	enrollmentRepo := &mockEnrollmentRepo{}
+	auditRepo := &mockAuditRepo{}
+
+	tokenMaker := token.NewTokenMaker("test-secret-key-1234567890")
+	authUC := usecase.NewAuthUseCase(adminRepo, auditRepo, tokenMaker)
+	deviceUC := usecase.NewDeviceUseCase(deviceRepo, auditRepo)
+	userUC := usecase.NewUserUseCase(userRepo, auditRepo)
+	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo)
+	syncUC := usecase.NewSyncUseCase(deviceRepo, userRepo, attendanceUC, enrollmentRepo)
+	enrollmentUC := usecase.NewEnrollmentUseCase(enrollmentRepo, userRepo, "data/test_enrollment")
+	auditUC := usecase.NewAuditUseCase(auditRepo)
+
+	handlers := &handlerHttp.Handlers{
+		Auth:       handlerHttp.NewAuthHandler(authUC),
+		User:       handlerHttp.NewUserHandler(userUC),
+		Attendance: handlerHttp.NewAttendanceHandler(attendanceUC),
+		Device:     handlerHttp.NewDeviceHandler(deviceUC),
+		Sync:       handlerHttp.NewSyncHandler(syncUC),
+		Enrollment: handlerHttp.NewEnrollmentHandler(enrollmentUC),
+		Audit:      handlerHttp.NewAuditHandler(auditUC),
+	}
+
+	tightLimiter := ratelimit.NewTokenBucketLimiter(1.0, 2, 1*time.Minute)
+	defer tightLimiter.Close()
+
+	router := handlerHttp.SetupRouter(handlers, tokenMaker, deviceUC, tightLimiter)
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	// 1st request -> allowed (200)
+	resp1, err := http.Get(ts.URL + "/health")
+	if err != nil || resp1.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp1.StatusCode)
+	}
+	resp1.Body.Close()
+
+	// 2nd request -> allowed (200)
+	resp2, err := http.Get(ts.URL + "/health")
+	if err != nil || resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	resp2.Body.Close()
+
+	// 3rd immediate request -> rate limit exceeded (429)
+	resp3, err := http.Get(ts.URL + "/health")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp3.Body.Close()
+	if resp3.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 Too Many Requests, got %d", resp3.StatusCode)
+	}
+}
+
+func TestHTTP_AttendanceManualAdjustment(t *testing.T) {
+	ts := setupTestServer()
+	defer ts.Close()
+
+	// 1. Login to get token
+	loginBody, _ := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "admin1234",
+	})
+	loginRespRaw, _ := http.Post(ts.URL+"/api/auth/login", "application/json", bytes.NewBuffer(loginBody))
+	var loginResp struct {
+		AccessToken string `json:"access_token"`
+	}
+	json.NewDecoder(loginRespRaw.Body).Decode(&loginResp)
+	loginRespRaw.Body.Close()
+
+	// 2. POST /api/attendance/manual without reason -> 400 Bad Request
+	noReasonBody, _ := json.Marshal(map[string]string{
+		"user_id":   "user-1",
+		"work_date": "2026-11-04",
+		"reason":    "",
+	})
+	reqNoReason, _ := http.NewRequest("POST", ts.URL+"/api/attendance/manual", bytes.NewBuffer(noReasonBody))
+	reqNoReason.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
+	reqNoReason.Header.Set("Content-Type", "application/json")
+	respNoReason, err := http.DefaultClient.Do(reqNoReason)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	respNoReason.Body.Close()
+	if respNoReason.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing reason, got %d", respNoReason.StatusCode)
+	}
+
+	// 3. POST /api/attendance/manual with reason -> 201 Created
+	validBody, _ := json.Marshal(map[string]string{
+		"user_id":        "user-1",
+		"work_date":      "2026-11-04",
+		"check_in_time":  "08:30",
+		"check_out_time": "17:30",
+		"reason":         "พนักงานไปปฏิบัติงานนอกสถานที่",
+	})
+	reqValid, _ := http.NewRequest("POST", ts.URL+"/api/attendance/manual", bytes.NewBuffer(validBody))
+	reqValid.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
+	reqValid.Header.Set("Content-Type", "application/json")
+	respValid, err := http.DefaultClient.Do(reqValid)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer respValid.Body.Close()
+	if respValid.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d", respValid.StatusCode)
+	}
+
+	var createdPair entity.AttendancePair
+	json.NewDecoder(respValid.Body).Decode(&createdPair)
+	if createdPair.AdjustmentReason != "พนักงานไปปฏิบัติงานนอกสถานที่" {
+		t.Fatalf("unexpected reason: %s", createdPair.AdjustmentReason)
+	}
+	if !createdPair.IsManual {
+		t.Fatalf("expected is_manual to be true")
+	}
+}
+
+func TestHTTP_Settings(t *testing.T) {
+	ts := setupTestServer()
+	defer ts.Close()
+
+	// 1. Login to get token
+	loginBody, _ := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "admin1234",
+	})
+	loginRespRaw, _ := http.Post(ts.URL+"/api/auth/login", "application/json", bytes.NewBuffer(loginBody))
+	var loginResp struct {
+		AccessToken string `json:"access_token"`
+	}
+	json.NewDecoder(loginRespRaw.Body).Decode(&loginResp)
+	loginRespRaw.Body.Close()
+
+	// 2. GET /api/settings -> 200
+	req, _ := http.NewRequest("GET", ts.URL+"/api/settings", nil)
+	req.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for settings, got %d", resp.StatusCode)
+	}
+
+	var settings entity.SystemSettings
+	json.NewDecoder(resp.Body).Decode(&settings)
+	if settings.WorkStartTime != "08:30" {
+		t.Fatalf("expected default 08:30, got %s", settings.WorkStartTime)
+	}
+
+	// 3. PUT /api/settings -> 200
+	updateBody, _ := json.Marshal(entity.SystemSettings{
+		WorkStartTime:        "09:00",
+		WorkEndTime:          "18:00",
+		MinWorkHours:         8.0,
+		DebounceSeconds:      45,
+		RecognitionThreshold: 0.70,
+	})
+	reqPut, _ := http.NewRequest("PUT", ts.URL+"/api/settings", bytes.NewBuffer(updateBody))
+	reqPut.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
+	reqPut.Header.Set("Content-Type", "application/json")
+	respPut, err := http.DefaultClient.Do(reqPut)
+	if err != nil {
+		t.Fatalf("put request failed: %v", err)
+	}
+	defer respPut.Body.Close()
+	if respPut.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on put settings, got %d", respPut.StatusCode)
 	}
 }

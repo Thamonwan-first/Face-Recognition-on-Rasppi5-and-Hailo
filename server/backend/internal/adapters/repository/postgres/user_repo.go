@@ -18,7 +18,8 @@ func NewUserRepository(db *sql.DB) ports.UserRepository {
 
 func (r *userRepo) GetByID(ctx context.Context, id string) (*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
+	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
 	FROM users u
@@ -30,7 +31,8 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*entity.User, error)
 
 func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
+	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
 	FROM users u
@@ -42,7 +44,8 @@ func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*ent
 
 func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
+	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
 	FROM users u
@@ -119,7 +122,8 @@ func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
 
 func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*entity.User, error) {
 	query := `
-	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department, u.status,
+	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
+	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (e.id IS NOT NULL) as has_embedding,
 	       e.embedding

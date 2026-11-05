@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 
+	"attendance-backend/internal/pkg/broker"
 	"attendance-backend/internal/pkg/token"
 	"attendance-backend/internal/usecase"
 	"github.com/gin-gonic/gin"
@@ -128,10 +129,15 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 type DeviceHandler struct {
 	deviceUC *usecase.DeviceUseCase
+	broker   *broker.EventBroker
 }
 
-func NewDeviceHandler(deviceUC *usecase.DeviceUseCase) *DeviceHandler {
-	return &DeviceHandler{deviceUC: deviceUC}
+func NewDeviceHandler(deviceUC *usecase.DeviceUseCase, b ...*broker.EventBroker) *DeviceHandler {
+	var brokerInst *broker.EventBroker
+	if len(b) > 0 {
+		brokerInst = b[0]
+	}
+	return &DeviceHandler{deviceUC: deviceUC, broker: brokerInst}
 }
 
 func (h *DeviceHandler) List(c *gin.Context) {
@@ -156,6 +162,14 @@ func (h *DeviceHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	if h.broker != nil && resp.Device != nil {
+		h.broker.Publish(broker.Event{
+			Type:    "device",
+			Payload: gin.H{"action": "registered", "device_id": resp.Device.ID},
+		})
+	}
+
 	c.JSON(http.StatusCreated, resp)
 }
 
@@ -166,5 +180,13 @@ func (h *DeviceHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	if h.broker != nil {
+		h.broker.Publish(broker.Event{
+			Type:    "device",
+			Payload: gin.H{"action": "deleted", "device_id": id},
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 }
