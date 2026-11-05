@@ -297,7 +297,7 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td>
-                    {u.has_face ? (
+                    {u.has_embedding ? (
                       <span
                         style={{
                           display: 'inline-flex',
@@ -512,13 +512,13 @@ export default function UsersPage() {
                     ข้อมูลและภาพถ่ายใบหน้า
                   </label>
                   {editUser && (
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: editUser.has_face ? '#16a34a' : '#64748b' }}>
-                      {editUser.has_face ? '🟢 ลงทะเบียนแล้ว' : '⚪ ยังไม่ลงทะเบียน'}
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: editUser.has_embedding ? '#16a34a' : '#64748b' }}>
+                      {editUser.has_embedding ? '🟢 ลงทะเบียนแล้ว' : '⚪ ยังไม่ลงทะเบียน'}
                     </span>
                   )}
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem', lineHeight: '1.4' }}>
-                  {editUser?.has_face
+                  {editUser?.has_embedding
                     ? 'หากต้องการเปลี่ยนรูปใบหน้า สามารถเลือกรูปถ่ายใหม่ 1–5 รูป (ภาพจะส่งไปคำนวณเวกเตอร์เฉลี่ยบน Kiosk และลบทิ้งทันทีตาม PDPA)'
                     : 'เลือกรูปถ่ายใบหน้า 1–5 รูป เพื่อลงทะเบียนเข้าสู่ระบบ (สามารถแนบตอนนี้หรืออัปเดตภายหลังได้)'}
                 </p>
