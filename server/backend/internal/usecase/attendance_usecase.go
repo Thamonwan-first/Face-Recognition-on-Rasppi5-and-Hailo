@@ -226,6 +226,30 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 	// 4. Update or Create Daily Attendance Pair
 	pair, err := uc.attendanceRepo.FindOpenPair(ctx, event.UserID, workDate)
 	if err != nil || pair == nil {
+		// If event is OUT or AUTO, check if there is an existing pair today for this user
+		// To support First-In, Last-Out logic (re-scanning OUT updates checkout time)
+		if event.Direction == "OUT" || event.Direction == "AUTO" {
+			if lastPair, err := uc.attendanceRepo.FindLastPairByUserAndDate(ctx, event.UserID, workDate); err == nil && lastPair != nil {
+				if event.Direction == "OUT" || (event.Direction == "AUTO" && lastPair.CheckInEventID != nil) {
+					now := time.Now().UTC()
+					lastPair.UpdatedAt = now
+					lastPair.CheckOutEventID = &event.EventID
+					lastPair.CheckOutTime = &event.CreatedAt
+
+					if lastPair.CheckInTime != nil {
+						duration := event.CreatedAt.Sub(*lastPair.CheckInTime)
+						hours := duration.Hours()
+						if hours < 0 {
+							hours = 0
+						}
+						lastPair.HoursWorked = &hours
+					}
+					lastPair.Status = CalculateAttendanceStatus(lastPair.CheckInTime, lastPair.CheckOutTime, lastPair.HoursWorked, lastPair.IsManual)
+					return uc.attendanceRepo.UpdatePair(ctx, lastPair)
+				}
+			}
+		}
+
 		newPair := &entity.AttendancePair{
 			UserID:    event.UserID,
 			WorkDate:  workDate,

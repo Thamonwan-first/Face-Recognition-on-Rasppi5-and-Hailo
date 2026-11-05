@@ -54,6 +54,21 @@ func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate 
 	return nil, entity.ErrNotFound
 }
 
+func (m *mockAttendanceRepo) FindLastPairByUserAndDate(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
+	var best *entity.AttendancePair
+	for _, p := range m.pairs {
+		if p.UserID == userID && p.WorkDate == workDate {
+			if best == nil || (best.CheckInEventID == nil && p.CheckInEventID != nil) || p.ID > best.ID {
+				best = p
+			}
+		}
+	}
+	if best != nil {
+		return best, nil
+	}
+	return nil, entity.ErrNotFound
+}
+
 func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *entity.AttendancePair) error {
 	pair.ID = len(m.pairs) + 1
 	m.pairs = append(m.pairs, pair)
@@ -153,6 +168,65 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 	}
 	if repo.pairs[1].Status != "open" {
 		t.Fatalf("expected second pair to be open, got %s", repo.pairs[1].Status)
+	}
+}
+
+func TestAttendanceUseCase_ProcessEvent_MultipleOuts(t *testing.T) {
+	repo := &mockAttendanceRepo{}
+	uc := usecase.NewAttendanceUseCase(repo)
+
+	now := time.Now().UTC()
+	// 1. First scan: IN
+	eventIn := &entity.AttendanceEvent{
+		EventID:   "evt-in-1",
+		UserID:    "user-200",
+		Direction: "IN",
+		CreatedAt: now,
+	}
+	if err := uc.ProcessEvent(context.Background(), eventIn); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(repo.pairs) != 1 {
+		t.Fatalf("expected 1 pair, got %d", len(repo.pairs))
+	}
+
+	// 2. Second scan: OUT (e.g. 1 hour later)
+	eventOut1 := &entity.AttendanceEvent{
+		EventID:   "evt-out-1",
+		UserID:    "user-200",
+		Direction: "OUT",
+		CreatedAt: now.Add(1 * time.Hour),
+	}
+	if err := uc.ProcessEvent(context.Background(), eventOut1); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(repo.pairs) != 1 {
+		t.Fatalf("expected still 1 pair after first checkout, got %d", len(repo.pairs))
+	}
+	if *repo.pairs[0].CheckOutEventID != "evt-out-1" {
+		t.Fatalf("expected check-out evt-out-1, got %s", *repo.pairs[0].CheckOutEventID)
+	}
+
+	// 3. Third scan: OUT again (e.g. at end of day, 8 hours later)
+	eventOut2 := &entity.AttendanceEvent{
+		EventID:   "evt-out-2",
+		UserID:    "user-200",
+		Direction: "OUT",
+		CreatedAt: now.Add(8 * time.Hour),
+	}
+	if err := uc.ProcessEvent(context.Background(), eventOut2); err != nil {
+		t.Fatalf("expected no error on duplicate checkout, got %v", err)
+	}
+
+	// Crucial check: Must NOT create a second pair!
+	if len(repo.pairs) != 1 {
+		t.Fatalf("expected still 1 pair (no extra rows), but got %d", len(repo.pairs))
+	}
+	if *repo.pairs[0].CheckOutEventID != "evt-out-2" {
+		t.Fatalf("expected updated check-out evt-out-2, got %s", *repo.pairs[0].CheckOutEventID)
+	}
+	if repo.pairs[0].HoursWorked == nil || *repo.pairs[0].HoursWorked < 7.9 {
+		t.Fatalf("expected updated hours worked ~8, got %v", repo.pairs[0].HoursWorked)
 	}
 }
 

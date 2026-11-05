@@ -269,6 +269,47 @@ func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate stri
 	return &p, nil
 }
 
+func (r *attendanceRepo) FindLastPairByUserAndDate(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
+	query := `
+	SELECT id, user_id, check_in_event_id, check_out_event_id, work_date, hours_worked, status, is_manual, COALESCE(adjustment_reason, ''), created_at, updated_at
+	FROM attendance_pairs
+	WHERE user_id = $1 AND work_date = $2
+	ORDER BY (CASE WHEN check_in_event_id IS NOT NULL THEN 0 ELSE 1 END), id DESC
+	LIMIT 1
+	`
+	row := r.db.QueryRowContext(ctx, query, userID, workDate)
+	var p entity.AttendancePair
+	var inID, outID sql.NullString
+	var hours sql.NullFloat64
+
+	if err := row.Scan(&p.ID, &p.UserID, &inID, &outID, &p.WorkDate, &hours, &p.Status, &p.IsManual, &p.AdjustmentReason, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, entity.ErrNotFound
+		}
+		return nil, err
+	}
+
+	if inID.Valid {
+		p.CheckInEventID = &inID.String
+		var t time.Time
+		if err := r.db.QueryRowContext(ctx, "SELECT created_at FROM attendance_events WHERE event_id = $1", inID.String).Scan(&t); err == nil {
+			p.CheckInTime = &t
+		}
+	}
+	if outID.Valid {
+		p.CheckOutEventID = &outID.String
+		var t time.Time
+		if err := r.db.QueryRowContext(ctx, "SELECT created_at FROM attendance_events WHERE event_id = $1", outID.String).Scan(&t); err == nil {
+			p.CheckOutTime = &t
+		}
+	}
+	if hours.Valid {
+		p.HoursWorked = &hours.Float64
+	}
+
+	return &p, nil
+}
+
 func (r *attendanceRepo) SavePair(ctx context.Context, p *entity.AttendancePair) error {
 	query := `
 	INSERT INTO attendance_pairs (user_id, check_in_event_id, check_out_event_id, work_date, hours_worked, status, is_manual, adjustment_reason, created_at, updated_at)

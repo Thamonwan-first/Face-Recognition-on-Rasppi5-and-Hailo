@@ -51,6 +51,7 @@ type AttendanceRepository interface {
 	ListPairs(ctx context.Context, startDate, endDate, userID, department, deviceID string, limit int) ([]*entity.AttendancePair, error)
 	GetPairByID(ctx context.Context, id int) (*entity.AttendancePair, error)
 	FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error)
+	FindLastPairByUserAndDate(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error)
 	SavePair(ctx context.Context, pair *entity.AttendancePair) error
 	UpdatePair(ctx context.Context, pair *entity.AttendancePair) error
 }

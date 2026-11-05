@@ -179,6 +179,9 @@ func (m *mockAttendanceRepo) GetPairByID(ctx context.Context, id int) (*entity.A
 func (m *mockAttendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
 	return nil, entity.ErrNotFound
 }
+func (m *mockAttendanceRepo) FindLastPairByUserAndDate(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
+	return nil, entity.ErrNotFound
+}
 func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *entity.AttendancePair) error {
 	return nil
 }
