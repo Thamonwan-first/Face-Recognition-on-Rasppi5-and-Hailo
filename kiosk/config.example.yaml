@@ -31,6 +31,7 @@ camera:
   fps: 30
   device_index: 0
   rotation: 0              # 0, 90, 180, 270 (rotate frame if camera is mounted rotated)
+  mirror: false            # true = selfie mode (กลับด้านแนวนอนเหมือนส่องกระจก)
 
 sync:
   interval_seconds: 10

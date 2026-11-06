@@ -26,6 +26,7 @@ class Camera:
         camera_index: int = 0,
         force_opencv: bool = False,
         rotation: int = 0,
+        mirror: bool = False,
     ):
         self.width = width
         self.height = height
@@ -33,6 +34,7 @@ class Camera:
         self.camera_index = camera_index
         self.force_opencv = force_opencv
         self.rotation = rotation
+        self.mirror = mirror
 
         self._picam = None
         self._cv_cap = None
@@ -121,6 +123,9 @@ class Camera:
                 frame = cv2.rotate(frame, cv2.ROTATE_180)
             elif self.rotation == 270:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        if frame is not None and self.mirror:
+            frame = cv2.flip(frame, 1)
 
         return frame
 

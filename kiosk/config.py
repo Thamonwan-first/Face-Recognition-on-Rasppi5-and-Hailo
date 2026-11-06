@@ -77,6 +77,7 @@ class KioskConfig:
     camera_height: int = int(_RAW.get("camera", {}).get("height", 480))
     camera_fps: int = int(_RAW.get("camera", {}).get("fps", 30))
     camera_rotation: int = int(_RAW.get("camera", {}).get("rotation", 0))
+    camera_mirror: bool = bool(_RAW.get("camera", {}).get("mirror", os.getenv("CAMERA_MIRROR", "false").lower() == "true"))
 
     db_path: str = _RAW.get("database", {}).get("path", "data/kiosk.db")
     fullscreen: bool = bool(_RAW.get("ui", {}).get("fullscreen", True))

@@ -39,6 +39,7 @@ def main() -> int:
         height=config.camera_height,
         fps=config.camera_fps,
         rotation=config.camera_rotation,
+        mirror=config.camera_mirror,
     )
     camera.start()
     logger.info("Camera online using backend: [%s]", camera.backend_name)
@@ -47,7 +48,7 @@ def main() -> int:
     detector = HailoDetector(
         detect_hef_path=config.detect_model_path,
         embed_hef_path=config.embedding_model_path,
-        conf_threshold=config.recognition_threshold,
+        conf_threshold=0.5,
     )
     detector.start()
     logger.info("Detector online using backend: [%s]", detector.backend_name)

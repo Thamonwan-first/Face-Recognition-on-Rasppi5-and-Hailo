@@ -178,8 +178,6 @@ class HailoDetector:
 
             for stride in (8, 16, 32):
                 feat_h, feat_w = 640 // stride, 640 // stride
-                centers = np.stack(np.mgrid[:feat_h, :feat_w][::-1], axis=-1).astype(np.float32)
-                centers = np.stack([centers * stride] * 2, axis=1).reshape((-1, 2))
 
                 s_score, s_bbox, s_kps = None, None, None
                 for k, v in raw_outputs.items():
@@ -194,18 +192,32 @@ class HailoDetector:
                 if s_score is None or s_bbox is None:
                     continue
 
+                total_points = s_bbox.shape[0]
+                num_anchors = max(1, total_points // (feat_h * feat_w))
+
+                grid = np.stack(np.mgrid[:feat_h, :feat_w][::-1], axis=-1).astype(np.float32)
+                anchor_centers = (grid * stride).reshape((-1, 2))
+                if num_anchors > 1:
+                    anchor_centers = np.stack([anchor_centers] * num_anchors, axis=1).reshape((-1, 2))
+
+                centers = anchor_centers
+
                 sc = 1.0 / (1.0 + np.exp(-s_score.flatten())) if s_score.max() > 1.0 else s_score.flatten()
                 mask = sc >= self.conf_threshold
                 if np.any(mask):
                     b = _distance2bbox(centers[mask], s_bbox[mask])
                     b[:, [0, 2]] *= scale_x
                     b[:, [1, 3]] *= scale_y
+                    b[:, [0, 2]] = np.clip(b[:, [0, 2]], 0, w - 1)
+                    b[:, [1, 3]] = np.clip(b[:, [1, 3]], 0, h - 1)
                     boxes.append(b)
                     scores.append(sc[mask])
                     if s_kps is not None:
                         kp = _distance2kps(centers[mask], s_kps[mask])
                         kp[:, 0::2] *= scale_x
                         kp[:, 1::2] *= scale_y
+                        kp[:, 0::2] = np.clip(kp[:, 0::2], 0, w - 1)
+                        kp[:, 1::2] = np.clip(kp[:, 1::2], 0, h - 1)
                         landmarks.append(kp)
 
             if not boxes:
