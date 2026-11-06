@@ -22,11 +22,11 @@ export default function DevicesPage() {
   const [newKeyData, setNewKeyData] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Fetch devices status list with auto-refresh every 10 seconds
+  // Fetch devices status list with auto-refresh every 3 seconds
   const { data: devices, isLoading, error } = useQuery({
     queryKey: ['devices'],
     queryFn: () => api.get('/api/devices/status'),
-    refetchInterval: 10000,
+    refetchInterval: 3000,
   });
 
   // Mutation: Register new device

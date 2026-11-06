@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -92,6 +93,31 @@ func main() {
 
 	// 7. Router Setup
 	router := http.SetupRouter(handlers, tokenMaker, deviceUC, rateLimiter)
+
+	// 8. Background Watcher: Instant Device Offline Detection (runs every 2s)
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			res, err := pgDB.ExecContext(ctx, `
+				UPDATE devices 
+				SET status = 'offline' 
+				WHERE status = 'online' 
+				  AND last_seen IS NOT NULL 
+				  AND last_seen < NOW() - INTERVAL '10 seconds'
+			`)
+			cancel()
+			if err == nil {
+				if rows, _ := res.RowsAffected(); rows > 0 {
+					eventBroker.Publish(broker.Event{
+						Type:    "device",
+						Payload: map[string]interface{}{"status": "offline", "count": rows},
+					})
+				}
+			}
+		}
+	}()
 
 	log.Printf("Server listening on :%s", port)
 	if err := router.Run(":" + port); err != nil {

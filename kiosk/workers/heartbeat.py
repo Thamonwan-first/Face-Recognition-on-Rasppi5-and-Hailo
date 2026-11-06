@@ -66,8 +66,8 @@ class HeartbeatWorker:
             except Exception as e:
                 logger.error("Heartbeat error: %s", e)
 
-            # Sleep 15 seconds (checks _running every 0.5s for clean shutdown)
-            for _ in range(30):
+            # Sleep 3 seconds (checks _running every 0.5s for clean shutdown)
+            for _ in range(6):
                 if not self._running:
                     break
                 time.sleep(0.5)
