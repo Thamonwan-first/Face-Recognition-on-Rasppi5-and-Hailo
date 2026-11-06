@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"attendance-backend/internal/entity"
 	"attendance-backend/internal/pkg/broker"
@@ -88,7 +89,10 @@ func (h *SyncHandler) Heartbeat(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{
+		"status":      "ok",
+		"server_time": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 func (h *SyncHandler) SyncUsers(c *gin.Context) {

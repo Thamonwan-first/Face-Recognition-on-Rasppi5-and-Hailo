@@ -78,17 +78,47 @@ class UserSyncWorker:
             users = data.get("users", [])
             latest_v = data.get("latest_version", last_v)
 
+            conn = self._get_connection()
+            cur = conn.cursor()
+
+            # Handle server database re-seed or version reset
+            if latest_v < last_v:
+                logger.warning(
+                    "Server version (%d) is lower than kiosk version (%d). Resetting local gallery to re-sync.",
+                    latest_v, last_v
+                )
+                cur.execute("DELETE FROM user_embeddings")
+                cur.execute("DELETE FROM users")
+                cur.execute("UPDATE sync_state SET value = '0' WHERE key = 'last_user_version'")
+                conn.commit()
+                last_v = 0
+                if self.on_users_updated:
+                    self.on_users_updated()
+                return
+
             if not users:
                 return
 
-            conn = self._get_connection()
-            cur = conn.cursor()
             for u in users:
                 user_id = u["id"]
                 deleted_at = u.get("deleted_at")
+                status = u.get("status", "active")
 
-                if deleted_at:
-                    cur.execute("UPDATE users SET deleted_at = ?, status = 'inactive' WHERE id = ?", (deleted_at, user_id))
+                if deleted_at or status != "active":
+                    cur.execute(
+                        """
+                        INSERT INTO users (id, employee_id, name, department, status, version, deleted_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                          employee_id=excluded.employee_id,
+                          name=excluded.name,
+                          department=excluded.department,
+                          status=excluded.status,
+                          version=excluded.version,
+                          deleted_at=excluded.deleted_at
+                        """,
+                        (user_id, u.get("employee_id"), u["name"], u.get("department"), status, u.get("version", 0), deleted_at or "suspended")
+                    )
                     cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
                 else:
                     cur.execute(
@@ -102,11 +132,11 @@ class UserSyncWorker:
                           status=excluded.status,
                           version=excluded.version
                         """,
-                        (user_id, u.get("employee_id"), u["name"], u.get("department"), u.get("status", "active"), u.get("version", 0))
+                        (user_id, u.get("employee_id"), u["name"], u.get("department"), "active", u.get("version", 0))
                     )
                     emb_b64 = u.get("embedding_b64")
                     cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
-                    if emb_b64 and u.get("status") == "active":
+                    if emb_b64:
                         emb_bytes = base64.b64decode(emb_b64)
                         cur.execute(
                             """

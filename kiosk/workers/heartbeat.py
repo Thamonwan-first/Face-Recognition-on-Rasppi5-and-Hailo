@@ -94,7 +94,33 @@ class HeartbeatWorker:
         }
 
         try:
-            requests.post(url, json=payload, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
+            res = requests.post(url, json=payload, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
+            if res.status_code == 200:
+                data = res.json()
+                server_time_str = data.get("server_time")
+                if server_time_str:
+                    self._check_and_sync_time(server_time_str)
             logger.debug("Heartbeat sent successfully")
         except Exception as e:
             logger.debug("Heartbeat server unreachable: %s", e)
+
+    def _check_and_sync_time(self, server_time_str: str):
+        """Check system time drift against Server and attempt sync if drifting > 5s."""
+        try:
+            from datetime import datetime, timezone
+            import subprocess
+            s_dt = datetime.fromisoformat(server_time_str.replace("Z", "+00:00"))
+            local_dt = datetime.now(timezone.utc)
+            drift_sec = abs((local_dt - s_dt).total_seconds())
+
+            if drift_sec > 5.0:
+                logger.warning("Clock drift detected (%.1fs off server). Attempting system time sync...", drift_sec)
+                # Formatted time for `date -u -s`
+                formatted_utc = s_dt.strftime("%Y-%m-%d %H:%M:%S")
+                res = subprocess.run(["sudo", "date", "-u", "-s", formatted_utc], capture_output=True, text=True)
+                if res.returncode == 0:
+                    logger.info("System clock synchronized with server: %s UTC", formatted_utc)
+                else:
+                    logger.debug("Automatic date sync skipped (requires sudo or permission): %s", res.stderr.strip())
+        except Exception as e:
+            logger.debug("Clock drift check failed: %s", e)

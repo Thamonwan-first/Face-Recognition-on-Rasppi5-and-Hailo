@@ -121,6 +121,17 @@ func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
 }
 
 func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*entity.User, error) {
+	// Auto-expire active users whose contracts passed end_date so their version increments and syncs
+	_, _ = r.db.ExecContext(ctx, `
+		UPDATE users 
+		SET status = 'inactive', 
+		    version = (SELECT COALESCE(MAX(version), 0) + 1 FROM users),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE end_date IS NOT NULL 
+		  AND end_date < CURRENT_DATE 
+		  AND status = 'active'
+	`)
+
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
 	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,

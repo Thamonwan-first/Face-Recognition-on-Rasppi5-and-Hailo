@@ -62,7 +62,7 @@ class KioskConfig:
         """Safely format server URL for an endpoint."""
         return f"{self.server_url.rstrip('/')}/{endpoint.lstrip('/')}"
 
-    recognition_threshold: float = float(_RAW.get("recognition", {}).get("threshold", 0.55))
+    recognition_threshold: float = float(_RAW.get("recognition", {}).get("threshold", os.getenv("RECOGNITION_THRESHOLD", 0.68)))
     debounce_seconds: int = int(_RAW.get("recognition", {}).get("debounce_seconds", 30))
     min_enroll_images: int = int(_RAW.get("recognition", {}).get("min_enroll_images", 3))
     max_enroll_images: int = int(_RAW.get("recognition", {}).get("max_enroll_images", 5))

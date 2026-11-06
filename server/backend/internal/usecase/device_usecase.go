@@ -45,7 +45,7 @@ func (uc *DeviceUseCase) List(ctx context.Context) ([]*entity.Device, error) {
 		return nil, err
 	}
 
-	threshold := 60 * time.Second
+	threshold := 30 * time.Second
 	if secStr := os.Getenv("DEVICE_OFFLINE_THRESHOLD_SECONDS"); secStr != "" {
 		if sec, err := strconv.Atoi(secStr); err == nil && sec > 0 {
 			threshold = time.Duration(sec) * time.Second
