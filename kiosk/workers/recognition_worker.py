@@ -15,32 +15,28 @@ from anti_spoof import AntiSpoofDetector
 logger = logging.getLogger(__name__)
 
 
-def draw_corner_brackets(img, x1, y1, x2, y2, color=(255, 255, 255), thickness=2, corner_len=22):
-    """Draw a clean, well-aligned face boundary box with accent corner brackets."""
+def draw_corner_brackets(img, x1, y1, x2, y2, color=(255, 255, 255), thickness=2, corner_len=24):
+    """Draw sleek minimalist corner brackets at the 4 face corners."""
     h_img, w_img = img.shape[:2]
     x1, y1 = max(0, int(x1)), max(0, int(y1))
     x2, y2 = min(w_img - 1, int(x2)), min(h_img - 1, int(y2))
 
-    # 1. Subtle outline so the user clearly sees the exact face frame
-    cv2.rectangle(img, (x1, y1), (x2, y2), (255, 255, 255), 1)
-
-    # 2. Prominent accent corner brackets
     w = x2 - x1
     h = y2 - y1
-    cl = max(10, min(corner_len, w // 4, h // 4))
+    cl = max(12, min(corner_len, w // 4, h // 4))
 
     # Top-Left
-    cv2.line(img, (x1, y1), (x1 + cl, y1), color, thickness + 1)
-    cv2.line(img, (x1, y1), (x1, y1 + cl), color, thickness + 1)
+    cv2.line(img, (x1, y1), (x1 + cl, y1), color, thickness)
+    cv2.line(img, (x1, y1), (x1, y1 + cl), color, thickness)
     # Top-Right
-    cv2.line(img, (x2, y1), (x2 - cl, y1), color, thickness + 1)
-    cv2.line(img, (x2, y1), (x2, y1 + cl), color, thickness + 1)
+    cv2.line(img, (x2, y1), (x2 - cl, y1), color, thickness)
+    cv2.line(img, (x2, y1), (x2, y1 + cl), color, thickness)
     # Bottom-Left
-    cv2.line(img, (x1, y2), (x1 + cl, y2), color, thickness + 1)
-    cv2.line(img, (x1, y2), (x1, y2 - cl), color, thickness + 1)
+    cv2.line(img, (x1, y2), (x1 + cl, y2), color, thickness)
+    cv2.line(img, (x1, y2), (x1, y2 - cl), color, thickness)
     # Bottom-Right
-    cv2.line(img, (x2, y2), (x2 - cl, y2), color, thickness + 1)
-    cv2.line(img, (x2, y2), (x2, y2 - cl), color, thickness + 1)
+    cv2.line(img, (x2, y2), (x2 - cl, y2), color, thickness)
+    cv2.line(img, (x2, y2), (x2, y2 - cl), color, thickness)
 
 
 class RecognitionWorker(QThread):
