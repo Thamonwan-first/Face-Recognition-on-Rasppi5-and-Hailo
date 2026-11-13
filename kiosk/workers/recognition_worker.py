@@ -4,6 +4,7 @@ Recognition Worker Thread — runs real-time pipeline and emits PyQt5 signals.
 import time
 import base64
 import logging
+from pathlib import Path
 import cv2
 import numpy as np
 from PyQt5.QtCore import QThread, pyqtSignal
