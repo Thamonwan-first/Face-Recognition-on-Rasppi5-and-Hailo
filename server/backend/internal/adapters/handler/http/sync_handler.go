@@ -37,11 +37,12 @@ func (h *SyncHandler) SyncEvents(c *gin.Context) {
 		return
 	}
 
-	syncedCount, err := h.syncUC.ProcessAttendanceEvents(c.Request.Context(), device.ID, req.Events)
+	syncedIDs, err := h.syncUC.ProcessAttendanceEvents(c.Request.Context(), device.ID, req.Events)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	syncedCount := len(syncedIDs)
 
 	if h.broker != nil && syncedCount > 0 {
 		h.broker.Publish(broker.Event{
@@ -54,9 +55,47 @@ func (h *SyncHandler) SyncEvents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"status":     "ok",
+		"synced":     syncedCount,
+		"synced_ids": syncedIDs,
+		"total":      len(req.Events),
+	})
+}
+
+type SyncUnrecognizedRequest struct {
+	Scans []*entity.UnrecognizedScan `json:"scans"`
+}
+
+func (h *SyncHandler) SyncUnrecognized(c *gin.Context) {
+	device := c.MustGet(ContextDeviceKey).(*entity.Device)
+
+	var req SyncUnrecognizedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	count, err := h.syncUC.ProcessUnrecognizedScans(c.Request.Context(), device.ID, req.Scans)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.broker != nil && count > 0 {
+		h.broker.Publish(broker.Event{
+			Type: "attendance",
+			Payload: gin.H{
+				"action":    "new_unrecognized",
+				"count":     count,
+				"device_id": device.ID,
+			},
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
-		"synced": syncedCount,
-		"total":  len(req.Events),
+		"synced": count,
+		"total":  len(req.Scans),
 	})
 }
 

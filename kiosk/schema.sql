@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     employee_id     TEXT,
     name            TEXT NOT NULL,
     department      TEXT,
+    photo_path      TEXT,                             -- Local cached path to avatar photo
     status          TEXT NOT NULL DEFAULT 'active',   -- active | pending_approval | inactive
     version         INTEGER NOT NULL DEFAULT 0,       -- server version for sync tracking
     deleted_at      TEXT,                             -- ISO-8601; soft-delete

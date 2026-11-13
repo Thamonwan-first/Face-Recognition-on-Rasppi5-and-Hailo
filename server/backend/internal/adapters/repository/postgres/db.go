@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"time"
 
 	"attendance-backend/internal/pkg/hasher"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -30,6 +31,11 @@ func NewPostgresDB(databaseURL string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open postgres database: %w", err)
 	}
+
+	// Configure connection pool to prevent unbounded growth and connection exhaustion
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres database: %w", err)
@@ -108,6 +114,11 @@ func createSchema(db *sql.DB) error {
 	-- Migration: ensure start_date and end_date columns exist if table was previously created
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS start_date DATE;
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS end_date DATE;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url VARCHAR(255);
+
+	-- Sequence for monotonic atomic user versioning across concurrent writes
+	CREATE SEQUENCE IF NOT EXISTS user_version_seq;
+	SELECT setval('user_version_seq', GREATEST(COALESCE((SELECT MAX(version) FROM users), 0) + 1, 1), false);
 
 	CREATE TABLE IF NOT EXISTS user_embeddings (
 		id VARCHAR(64) PRIMARY KEY,
@@ -128,15 +139,21 @@ func createSchema(db *sql.DB) error {
 		direction VARCHAR(32) DEFAULT 'AUTO',
 		confidence DOUBLE PRECISION NOT NULL,
 		clock_synced BOOLEAN DEFAULT FALSE,
+		snapshot_url VARCHAR(255),
 		created_at TIMESTAMPTZ NOT NULL,
 		synced_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);
+
+	-- Migration: ensure snapshot_url exists on attendance_events
+	ALTER TABLE attendance_events ADD COLUMN IF NOT EXISTS snapshot_url VARCHAR(255);
 
 	CREATE TABLE IF NOT EXISTS attendance_pairs (
 		id SERIAL PRIMARY KEY,
 		user_id VARCHAR(64) NOT NULL,
 		check_in_event_id VARCHAR(64),
 		check_out_event_id VARCHAR(64),
+		check_in_snapshot VARCHAR(255),
+		check_out_snapshot VARCHAR(255),
 		work_date DATE NOT NULL,
 		hours_worked DOUBLE PRECISION,
 		status VARCHAR(32) DEFAULT 'open',
@@ -146,9 +163,22 @@ func createSchema(db *sql.DB) error {
 		updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);
 
-	-- Migration: ensure is_manual and adjustment_reason columns exist
+	-- Migration: ensure is_manual, adjustment_reason and snapshot columns exist
 	ALTER TABLE attendance_pairs ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT FALSE;
 	ALTER TABLE attendance_pairs ADD COLUMN IF NOT EXISTS adjustment_reason TEXT DEFAULT '';
+	ALTER TABLE attendance_pairs ADD COLUMN IF NOT EXISTS check_in_snapshot VARCHAR(255);
+	ALTER TABLE attendance_pairs ADD COLUMN IF NOT EXISTS check_out_snapshot VARCHAR(255);
+
+	CREATE TABLE IF NOT EXISTS unrecognized_scans (
+		id VARCHAR(64) PRIMARY KEY,
+		device_id VARCHAR(64) NOT NULL,
+		snapshot_url VARCHAR(255) NOT NULL,
+		confidence DOUBLE PRECISION DEFAULT 0.0,
+		status VARCHAR(32) DEFAULT 'pending',
+		resolved_user_id VARCHAR(64),
+		resolved_at TIMESTAMPTZ,
+		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+	);
 
 	CREATE TABLE IF NOT EXISTS enrollment_jobs (
 		id VARCHAR(64) PRIMARY KEY,
@@ -184,6 +214,8 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_pg_pairs_user_workdate_status ON attendance_pairs(user_id, work_date, status);
 	CREATE INDEX IF NOT EXISTS idx_pg_pairs_workdate ON attendance_pairs(work_date);
 	CREATE INDEX IF NOT EXISTS idx_pg_attendance_events_user_created ON attendance_events(user_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_pg_unrecognized_created ON unrecognized_scans(created_at);
+	CREATE INDEX IF NOT EXISTS idx_pg_unrecognized_status ON unrecognized_scans(status);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -214,26 +246,7 @@ func seedDefaults(db *sql.DB) error {
 		_, _ = db.Exec("UPDATE admins SET permissions = '[\"*\"]' WHERE username = 'admin' AND (permissions IS NULL OR permissions = '' OR permissions = '[]')")
 	}
 
-	// 2. Seed Default Kiosk (only if initial development mode or key provided)
-	var devCount int
-	_ = db.QueryRow("SELECT COUNT(*) FROM devices WHERE id = 'kiosk-01'").Scan(&devCount)
-	if devCount == 0 && !isProd {
-		kioskKey := os.Getenv("DEFAULT_KIOSK_API_KEY")
-		if kioskKey == "" {
-			kioskKey = "changeme-generate-with-openssl-rand-hex-32"
-		}
-		kioskHash := hasher.HashAPIKey(kioskKey)
-		_, _ = db.Exec(
-			"INSERT INTO devices (id, name, location, direction, api_key_hash, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)",
-			"kiosk-01", "kiosk-01", "", "AUTO", kioskHash, "offline",
-		)
-		_, _ = db.Exec(
-			"INSERT INTO device_state (device_id, applied_version, model_version, sw_version, updated_at) VALUES ($1, 0, '', '', CURRENT_TIMESTAMP) ON CONFLICT(device_id) DO NOTHING",
-			"kiosk-01",
-		)
-	}
-
-	// 3. Seed Default System Settings
+	// 2. Seed Default System Settings
 	defaultSettings := map[string]string{
 		"work_start_time":       "08:30",
 		"work_end_time":         "17:30",

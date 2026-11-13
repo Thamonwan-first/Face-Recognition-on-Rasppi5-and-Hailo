@@ -112,6 +112,15 @@ func (m *mockDeviceRepo) UpdateIPAddress(ctx context.Context, id string, ip stri
 	return nil
 }
 
+func (m *mockDeviceRepo) UpdateStatusAndIP(ctx context.Context, id string, status string, ip string, lastSeen time.Time) error {
+	if m.device != nil && m.device.ID == id {
+		m.device.Status = status
+		m.device.IPAddress = ip
+		m.device.LastSeen = &lastSeen
+	}
+	return nil
+}
+
 func (m *mockDeviceRepo) UpdateState(ctx context.Context, state *entity.DeviceState) error {
 	return nil
 }
@@ -186,6 +195,24 @@ func (m *mockAttendanceRepo) SavePair(ctx context.Context, pair *entity.Attendan
 	return nil
 }
 func (m *mockAttendanceRepo) UpdatePair(ctx context.Context, pair *entity.AttendancePair) error {
+	return nil
+}
+func (m *mockAttendanceRepo) SaveEventAndPair(ctx context.Context, event *entity.AttendanceEvent, pair *entity.AttendancePair, isUpdate bool) error {
+	return nil
+}
+func (m *mockAttendanceRepo) SaveUnrecognized(ctx context.Context, scan *entity.UnrecognizedScan) error {
+	return nil
+}
+func (m *mockAttendanceRepo) ListUnrecognized(ctx context.Context, limit int) ([]*entity.UnrecognizedScan, error) {
+	return nil, nil
+}
+func (m *mockAttendanceRepo) GetUnrecognizedByID(ctx context.Context, id string) (*entity.UnrecognizedScan, error) {
+	return nil, entity.ErrNotFound
+}
+func (m *mockAttendanceRepo) ResolveUnrecognized(ctx context.Context, id, userID, status string) error {
+	return nil
+}
+func (m *mockAttendanceRepo) DeleteUnrecognized(ctx context.Context, id string) error {
 	return nil
 }
 

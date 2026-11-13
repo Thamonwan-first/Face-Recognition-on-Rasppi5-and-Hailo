@@ -79,6 +79,44 @@ func (m *mockAttendanceRepo) UpdatePair(ctx context.Context, pair *entity.Attend
 	return nil
 }
 
+func (m *mockAttendanceRepo) SaveEventAndPair(ctx context.Context, event *entity.AttendanceEvent, pair *entity.AttendancePair, isUpdate bool) error {
+	m.events = append(m.events, event)
+	if pair != nil {
+		if !isUpdate {
+			pair.ID = len(m.pairs) + 1
+			m.pairs = append(m.pairs, pair)
+		} else {
+			for i, p := range m.pairs {
+				if p.ID == pair.ID {
+					m.pairs[i] = pair
+					break
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (m *mockAttendanceRepo) SaveUnrecognized(ctx context.Context, scan *entity.UnrecognizedScan) error {
+	return nil
+}
+
+func (m *mockAttendanceRepo) ListUnrecognized(ctx context.Context, limit int) ([]*entity.UnrecognizedScan, error) {
+	return nil, nil
+}
+
+func (m *mockAttendanceRepo) GetUnrecognizedByID(ctx context.Context, id string) (*entity.UnrecognizedScan, error) {
+	return nil, entity.ErrNotFound
+}
+
+func (m *mockAttendanceRepo) ResolveUnrecognized(ctx context.Context, id, userID, status string) error {
+	return nil
+}
+
+func (m *mockAttendanceRepo) DeleteUnrecognized(ctx context.Context, id string) error {
+	return nil
+}
+
 type mockUserRepo struct {
 	users []*entity.User
 }
@@ -111,7 +149,8 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 	repo := &mockAttendanceRepo{}
 	uc := usecase.NewAttendanceUseCase(repo)
 
-	now := time.Now().UTC()
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	now := time.Date(2026, 11, 12, 8, 30, 0, 0, loc).UTC()
 	eventIn := &entity.AttendanceEvent{
 		EventID:   "evt-1",
 		UserID:    "user-100",
@@ -175,7 +214,8 @@ func TestAttendanceUseCase_ProcessEvent_MultipleOuts(t *testing.T) {
 	repo := &mockAttendanceRepo{}
 	uc := usecase.NewAttendanceUseCase(repo)
 
-	now := time.Now().UTC()
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	now := time.Date(2026, 11, 12, 8, 30, 0, 0, loc).UTC()
 	// 1. First scan: IN
 	eventIn := &entity.AttendanceEvent{
 		EventID:   "evt-in-1",

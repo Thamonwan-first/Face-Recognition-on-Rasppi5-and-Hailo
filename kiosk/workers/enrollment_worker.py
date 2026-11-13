@@ -115,8 +115,15 @@ class EnrollmentWorker:
                 except Exception as img_err:
                     logger.error("Error processing enrollment image #%d for job %s: %s", idx, job_id, img_err)
 
+            result_url = self.config.get_url("/sync/enrollment/result") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/enrollment/result"
+            post_headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
+
             if not captured_embeddings:
-                logger.error("Could not extract any embeddings for job %s", job_id)
+                logger.error("Could not extract any embeddings for job %s. Notifying server of failure.", job_id)
+                try:
+                    requests.post(result_url, json={"job_id": job_id, "embedding_b64": "", "quality_score": 0.0}, headers=post_headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
+                except Exception as post_err:
+                    logger.debug("Failed notifying server of enrollment failure: %s", post_err)
                 return
 
             # Compute average embedding (mean vector) and normalize with L2 norm
@@ -129,8 +136,6 @@ class EnrollmentWorker:
             emb_b64 = base64.b64encode(emb_bytes).decode("utf-8")
 
             # Submit result to Server
-            result_url = self.config.get_url("/sync/enrollment/result") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/enrollment/result"
-            post_headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
             payload = {
                 "job_id": job_id,
                 "embedding_b64": emb_b64,

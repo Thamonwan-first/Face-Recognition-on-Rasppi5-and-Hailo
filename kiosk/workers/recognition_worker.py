@@ -1,6 +1,8 @@
 """
 Recognition Worker Thread — runs real-time pipeline and emits PyQt5 signals.
 """
+import time
+import base64
 import logging
 import cv2
 import numpy as np
@@ -39,10 +41,32 @@ def draw_corner_brackets(img, x1, y1, x2, y2, color=(255, 255, 255), thickness=2
     cv2.line(img, (x2, y2), (x2, y2 - cl), color, thickness)
 
 
+def crop_face_snapshot_b64(frame_rgb, bbox) -> str:
+    """Crop and encode 250x250 face snapshot only when an event is actually recorded."""
+    try:
+        x1, y1, x2, y2 = bbox
+        h_frame, w_frame = frame_rgb.shape[:2]
+        bw, bh = x2 - x1, y2 - y1
+        pad_w, pad_h = int(bw * 0.15), int(bh * 0.15)
+        cx1 = max(0, int(x1 - pad_w))
+        cy1 = max(0, int(y1 - pad_h))
+        cx2 = min(w_frame, int(x2 + pad_w))
+        cy2 = min(h_frame, int(y2 + pad_h))
+        face_crop = frame_rgb[cy1:cy2, cx1:cx2]
+        if face_crop.size > 0:
+            face_resized = cv2.resize(face_crop, (250, 250))
+            face_bgr = cv2.cvtColor(face_resized, cv2.COLOR_RGB2BGR)
+            _, buf = cv2.imencode('.jpg', face_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            return base64.b64encode(buf).decode('utf-8')
+    except Exception as crop_err:
+        logger.debug("Failed creating face snapshot: %s", crop_err)
+    return ""
+
+
 class RecognitionWorker(QThread):
     """Camera capture and face recognition worker thread."""
     frame_ready = pyqtSignal(QImage)
-    face_recognized = pyqtSignal(str, float, str, str, str)
+    face_recognized = pyqtSignal(str, float, str, str, str, str)
     unknown_detected = pyqtSignal()
     spoof_detected = pyqtSignal()
 
@@ -64,6 +88,7 @@ class RecognitionWorker(QThread):
             self.anti_spoof = None
 
         self.gallery_cache = []
+        self._recent_scans = {}
         self.reload_gallery()
 
     def reload_gallery(self):
@@ -79,6 +104,16 @@ class RecognitionWorker(QThread):
 
     def set_direction(self, direction):
         self.current_direction = direction
+
+    def _is_clock_synced(self) -> bool:
+        """Verify if system clock is synchronized via RTC, NTP, or valid modern epoch."""
+        if getattr(self.config, "has_rtc", False) or Path("/dev/rtc").exists() or Path("/dev/rtc0").exists():
+            return True
+        try:
+            from datetime import datetime
+            return datetime.now().year >= 2024
+        except Exception:
+            return False
 
     def run(self):
         while self._running:
@@ -127,20 +162,60 @@ class RecognitionWorker(QThread):
                         name = user_info.get("name", "Unknown")
                         emp_id = user_info.get("employee_id", "")
                         dept = user_info.get("department", "")
+                        photo_path = user_info.get("photo_path", "")
 
                         cv2.putText(annotated, name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
-                        rec = self.db.record_attendance(
-                            user_id,
-                            conf,
-                            self.current_direction,
-                            self.config.device_id,
-                            self.config.debounce_seconds,
-                        )
-                        if rec:
-                            self.face_recognized.emit(name, conf, rec["direction"], emp_id, dept)
+                        # Fast in-memory debounce check before querying SQLite in 30fps loop
+                        now = time.time()
+                        last_scan = self._recent_scans.get(user_id, 0)
+                        if (now - last_scan >= self.config.debounce_seconds) and not self.db.is_debounced(user_id, self.config.debounce_seconds):
+                            snapshot_b64 = crop_face_snapshot_b64(frame_rgb, (x1, y1, x2, y2))
+                            rec = self.db.record_attendance(
+                                user_id,
+                                conf,
+                                self.current_direction,
+                                self.config.device_id,
+                                self.config.debounce_seconds,
+                                clock_synced=self._is_clock_synced(),
+                                snapshot_b64=snapshot_b64,
+                            )
+                            if rec:
+                                self._recent_scans[user_id] = now
+                                # Bound memory: purge stale entries older than 2x debounce window
+                                if len(self._recent_scans) > 50:
+                                    cutoff = now - (2 * self.config.debounce_seconds)
+                                    self._recent_scans = {uid: t for uid, t in self._recent_scans.items() if t > cutoff}
+                                self.face_recognized.emit(name, conf, rec["direction"], emp_id, dept, photo_path)
                     else:
+                        now = time.time()
+                        if not hasattr(self, '_unknown_face_start') or self._unknown_face_start is None:
+                            self._unknown_face_start = now
+                            self._unknown_last_seen = now
+                        else:
+                            if now - self._unknown_last_seen < 0.5:
+                                self._unknown_last_seen = now
+                                if (now - self._unknown_face_start >= 1.0) and (now - getattr(self, '_last_unrec_push_time', 0) >= 15.0):
+                                    self._last_unrec_push_time = now
+                                    # Only crop & encode snapshot JPEG when unknown face actually triggers
+                                    snap_b64 = crop_face_snapshot_b64(frame_rgb, (x1, y1, x2, y2))
+                                    if snap_b64:
+                                        try:
+                                            self.db.record_unrecognized(
+                                                device_id=self.config.device_id,
+                                                confidence=0.0,
+                                                snapshot_b64=snap_b64,
+                                            )
+                                            logger.info("Recorded unrecognized face scan for dashboard review")
+                                        except Exception as ur_err:
+                                            logger.debug("Failed recording unrecognized scan: %s", ur_err)
+                            else:
+                                self._unknown_face_start = now
+                                self._unknown_last_seen = now
                         self.unknown_detected.emit()
+
+                if not faces:
+                    self._unknown_face_start = None
 
                 h, w, ch = annotated.shape
                 qimg = QImage(annotated.data, w, h, ch * w, QImage.Format_RGB888).copy()

@@ -15,6 +15,7 @@ type User struct {
 	EndDate      *string    `json:"end_date"`
 	Version      int        `json:"version"`
 	DeletedAt    *time.Time `json:"deleted_at"`
+	PhotoURL     string     `json:"photo_url,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	HasEmbedding bool       `json:"has_embedding"`

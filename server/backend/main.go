@@ -35,6 +35,9 @@ func main() {
 	if uploadDir == "" {
 		uploadDir = "data/enrollment_images"
 	}
+	_ = os.MkdirAll(uploadDir, 0755)
+	_ = os.MkdirAll("data/uploads/avatars", 0755)
+	_ = os.MkdirAll("data/uploads/snapshots/unrecognized", 0755)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -64,9 +67,9 @@ func main() {
 	authUC := usecase.NewAuthUseCase(adminRepo, auditRepo, tokenMaker)
 	deviceUC := usecase.NewDeviceUseCase(deviceRepo, auditRepo)
 	userUC := usecase.NewUserUseCase(userRepo, auditRepo)
-	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo, auditRepo, userRepo, settingsRepo)
-	syncUC := usecase.NewSyncUseCase(deviceRepo, userRepo, attendanceUC, enrollmentRepo)
 	enrollmentUC := usecase.NewEnrollmentUseCase(enrollmentRepo, userRepo, uploadDir, auditRepo, deviceRepo)
+	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo, auditRepo, userRepo, settingsRepo, enrollmentUC)
+	syncUC := usecase.NewSyncUseCase(deviceRepo, userRepo, attendanceUC, enrollmentRepo)
 	auditUC := usecase.NewAuditUseCase(auditRepo)
 	settingsUC := usecase.NewSettingsUseCase(settingsRepo, auditRepo)
 

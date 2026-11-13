@@ -99,15 +99,61 @@ class UserSyncWorker:
             if not users:
                 return
 
+            # Pre-download avatar images outside SQLite transaction to prevent locking the database
+            avatars_dir = Path(__file__).resolve().parent.parent / "data" / "avatars"
+            avatars_dir.mkdir(parents=True, exist_ok=True)
+            user_photo_paths = {}
+
+            for u in users:
+                user_id = u["id"]
+                photo_url = u.get("photo_url")
+                local_img_path = avatars_dir / f"{user_id}.jpg"
+
+                if photo_url:
+                    full_photo_url = self.config.get_url(photo_url) if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}{photo_url}"
+                    try:
+                        img_res = requests.get(full_photo_url, headers=headers, timeout=5, verify=getattr(self.config, 'ssl_verify', False))
+                        if img_res.status_code == 200:
+                            local_img_path.write_bytes(img_res.content)
+                            user_photo_paths[user_id] = str(local_img_path)
+                    except Exception as e:
+                        logger.debug("Failed downloading avatar for %s: %s", user_id, e)
+                        if local_img_path.exists():
+                            user_photo_paths[user_id] = str(local_img_path)
+                elif local_img_path.exists():
+                    user_photo_paths[user_id] = str(local_img_path)
+
+            # Rapid atomic SQLite transaction without any blocking network I/O
+            conn = self._get_connection()
+            cur = conn.cursor()
+
             for u in users:
                 user_id = u["id"]
                 deleted_at = u.get("deleted_at")
                 status = u.get("status", "active")
+                photo_path = user_photo_paths.get(user_id, "")
 
                 if deleted_at or status != "active":
                     cur.execute(
                         """
-                        INSERT INTO users (id, employee_id, name, department, status, version, deleted_at)
+                        INSERT INTO users (id, employee_id, name, department, status, version, photo_path, deleted_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                          employee_id=excluded.employee_id,
+                          name=excluded.name,
+                          department=excluded.department,
+                          status=excluded.status,
+                          version=excluded.version,
+                          photo_path=COALESCE(excluded.photo_path, users.photo_path),
+                          deleted_at=excluded.deleted_at
+                        """,
+                        (user_id, u.get("employee_id"), u["name"], u.get("department"), status, u.get("version", 0), photo_path or None, deleted_at or "suspended")
+                    )
+                    cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO users (id, employee_id, name, department, status, version, photo_path)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(id) DO UPDATE SET
                           employee_id=excluded.employee_id,
@@ -115,24 +161,9 @@ class UserSyncWorker:
                           department=excluded.department,
                           status=excluded.status,
                           version=excluded.version,
-                          deleted_at=excluded.deleted_at
+                          photo_path=COALESCE(excluded.photo_path, users.photo_path)
                         """,
-                        (user_id, u.get("employee_id"), u["name"], u.get("department"), status, u.get("version", 0), deleted_at or "suspended")
-                    )
-                    cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
-                else:
-                    cur.execute(
-                        """
-                        INSERT INTO users (id, employee_id, name, department, status, version)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(id) DO UPDATE SET
-                          employee_id=excluded.employee_id,
-                          name=excluded.name,
-                          department=excluded.department,
-                          status=excluded.status,
-                          version=excluded.version
-                        """,
-                        (user_id, u.get("employee_id"), u["name"], u.get("department"), "active", u.get("version", 0))
+                        (user_id, u.get("employee_id"), u["name"], u.get("department"), "active", u.get("version", 0), photo_path or None)
                     )
                     emb_b64 = u.get("embedding_b64")
                     cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))

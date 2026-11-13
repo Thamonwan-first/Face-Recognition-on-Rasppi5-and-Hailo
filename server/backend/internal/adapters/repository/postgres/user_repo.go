@@ -19,9 +19,10 @@ func NewUserRepository(db *sql.DB) ports.UserRepository {
 func (r *userRepo) GetByID(ctx context.Context, id string) (*entity.User, error) {
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
-	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
+	       u.status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
-	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
+	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding,
+	       COALESCE(u.photo_url, '') as photo_url
 	FROM users u
 	WHERE u.id = $1
 	`
@@ -32,9 +33,10 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*entity.User, error)
 func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*entity.User, error) {
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
-	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
+	       u.status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
-	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
+	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding,
+	       COALESCE(u.photo_url, '') as photo_url
 	FROM users u
 	WHERE u.employee_id = $1
 	`
@@ -45,9 +47,10 @@ func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*ent
 func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
-	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
+	       u.status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
-	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding
+	       (SELECT COUNT(*) FROM user_embeddings e WHERE e.user_id = u.id) > 0 as has_embedding,
+	       COALESCE(u.photo_url, '') as photo_url
 	FROM users u
 	WHERE u.deleted_at IS NULL
 	`
@@ -75,12 +78,12 @@ func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.Use
 
 func (r *userRepo) Create(ctx context.Context, u *entity.User) error {
 	query := `
-	INSERT INTO users (id, employee_id, title, first_name, last_name, name, department, status, start_date, end_date, version, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (SELECT COALESCE(MAX(version), 0) + 1 FROM users), $11, $12)
+	INSERT INTO users (id, employee_id, title, first_name, last_name, name, department, status, start_date, end_date, photo_url, version, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, nextval('user_version_seq'), $12, $13)
 	RETURNING version
 	`
 	err := r.db.QueryRowContext(ctx, query,
-		u.ID, u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.CreatedAt, u.UpdatedAt).Scan(&u.Version)
+		u.ID, u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.PhotoURL, u.CreatedAt, u.UpdatedAt).Scan(&u.Version)
 	return err
 }
 
@@ -88,14 +91,14 @@ func (r *userRepo) Update(ctx context.Context, u *entity.User) error {
 	query := `
 	UPDATE users SET
 		employee_id = $1, title = $2, first_name = $3, last_name = $4, name = $5, department = $6, status = $7,
-		start_date = $8, end_date = $9,
-		version = (SELECT COALESCE(MAX(version), 0) + 1 FROM users),
-		updated_at = $10
-	WHERE id = $11
+		start_date = $8, end_date = $9, photo_url = $10,
+		version = nextval('user_version_seq'),
+		updated_at = $11
+	WHERE id = $12
 	RETURNING version
 	`
 	err := r.db.QueryRowContext(ctx, query,
-		u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.UpdatedAt, u.ID).Scan(&u.Version)
+		u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.PhotoURL, u.UpdatedAt, u.ID).Scan(&u.Version)
 	return err
 }
 
@@ -104,11 +107,15 @@ func (r *userRepo) Delete(ctx context.Context, id string) error {
 	UPDATE users SET
 		deleted_at = CURRENT_TIMESTAMP,
 		status = 'inactive',
-		version = (SELECT COALESCE(MAX(version), 0) + 1 FROM users)
+		version = nextval('user_version_seq')
 	WHERE id = $1
 	`
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
+	if _, err := r.db.ExecContext(ctx, query, id); err != nil {
+		return err
+	}
+	// PDPA: Purge biometric facial vector upon user deletion
+	_, _ = r.db.ExecContext(ctx, "DELETE FROM user_embeddings WHERE user_id = $1", id)
+	return nil
 }
 
 func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
@@ -121,22 +128,12 @@ func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
 }
 
 func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*entity.User, error) {
-	// Auto-expire active users whose contracts passed end_date so their version increments and syncs
-	_, _ = r.db.ExecContext(ctx, `
-		UPDATE users 
-		SET status = 'inactive', 
-		    version = (SELECT COALESCE(MAX(version), 0) + 1 FROM users),
-		    updated_at = CURRENT_TIMESTAMP
-		WHERE end_date IS NOT NULL 
-		  AND end_date < CURRENT_DATE 
-		  AND status = 'active'
-	`)
-
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
-	       CASE WHEN u.end_date IS NOT NULL AND u.end_date < CURRENT_DATE THEN 'inactive' ELSE u.status END AS status,
+	       u.status,
 	       u.start_date::text, u.end_date::text, u.version, u.deleted_at, u.created_at, u.updated_at,
 	       (e.id IS NOT NULL) as has_embedding,
+	       COALESCE(u.photo_url, '') as photo_url,
 	       e.embedding
 	FROM users u
 	LEFT JOIN user_embeddings e ON u.id = e.user_id
@@ -152,13 +149,13 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*e
 	var users []*entity.User
 	for rows.Next() {
 		var u entity.User
-		var empID, title, fName, lName, dept, startDate, endDate sql.NullString
+		var empID, title, fName, lName, dept, startDate, endDate, photoURL sql.NullString
 		var deletedAt sql.NullTime
 		var rawEmb []byte
 
 		if err := rows.Scan(
 			&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status,
-			&startDate, &endDate, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding, &rawEmb,
+			&startDate, &endDate, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding, &photoURL, &rawEmb,
 		); err != nil {
 			return nil, err
 		}
@@ -168,6 +165,7 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*e
 		u.FirstName = fName.String
 		u.LastName = lName.String
 		u.Department = dept.String
+		u.PhotoURL = photoURL.String
 		if startDate.Valid {
 			u.StartDate = &startDate.String
 		}
@@ -232,12 +230,12 @@ type rowScanner interface {
 
 func scanUser(scanner rowScanner) (*entity.User, error) {
 	var u entity.User
-	var empID, title, fName, lName, dept, startDate, endDate sql.NullString
+	var empID, title, fName, lName, dept, startDate, endDate, photoURL sql.NullString
 	var deletedAt sql.NullTime
 
 	if err := scanner.Scan(
 		&u.ID, &empID, &title, &fName, &lName, &u.Name, &dept, &u.Status,
-		&startDate, &endDate, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding,
+		&startDate, &endDate, &u.Version, &deletedAt, &u.CreatedAt, &u.UpdatedAt, &u.HasEmbedding, &photoURL,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, entity.ErrNotFound
@@ -250,6 +248,7 @@ func scanUser(scanner rowScanner) (*entity.User, error) {
 	u.FirstName = fName.String
 	u.LastName = lName.String
 	u.Department = dept.String
+	u.PhotoURL = photoURL.String
 	if startDate.Valid {
 		u.StartDate = &startDate.String
 	}

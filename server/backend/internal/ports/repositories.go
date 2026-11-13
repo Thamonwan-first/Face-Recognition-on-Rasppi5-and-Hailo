@@ -25,6 +25,7 @@ type DeviceRepository interface {
 	Create(ctx context.Context, device *entity.Device) error
 	UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error
 	UpdateIPAddress(ctx context.Context, id string, ip string) error
+	UpdateStatusAndIP(ctx context.Context, id string, status string, ip string, lastSeen time.Time) error
 	UpdateState(ctx context.Context, state *entity.DeviceState) error
 	Delete(ctx context.Context, id string) error
 }
@@ -54,6 +55,13 @@ type AttendanceRepository interface {
 	FindLastPairByUserAndDate(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error)
 	SavePair(ctx context.Context, pair *entity.AttendancePair) error
 	UpdatePair(ctx context.Context, pair *entity.AttendancePair) error
+	SaveEventAndPair(ctx context.Context, event *entity.AttendanceEvent, pair *entity.AttendancePair, isUpdate bool) error
+
+	SaveUnrecognized(ctx context.Context, scan *entity.UnrecognizedScan) error
+	ListUnrecognized(ctx context.Context, limit int) ([]*entity.UnrecognizedScan, error)
+	GetUnrecognizedByID(ctx context.Context, id string) (*entity.UnrecognizedScan, error)
+	ResolveUnrecognized(ctx context.Context, id, userID, status string) error
+	DeleteUnrecognized(ctx context.Context, id string) error
 }
 
 type SettingsRepository interface {

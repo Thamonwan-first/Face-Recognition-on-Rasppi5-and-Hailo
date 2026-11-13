@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 User=%u
 WorkingDirectory=%h/Face-Recognition-on-Rasppi5-and-Hailo/kiosk
+EnvironmentFile=-%h/Face-Recognition-on-Rasppi5-and-Hailo/kiosk/.env
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=%h/.Xauthority
 Environment=XDG_RUNTIME_DIR=/run/user/%U

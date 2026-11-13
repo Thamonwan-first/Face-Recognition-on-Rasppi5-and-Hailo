@@ -12,6 +12,7 @@ from unittest.mock import patch, MagicMock
 KIOSK_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIOSK_DIR))
 
+from datetime import datetime, timezone
 from database import init_db, Database
 from workers.outbox_worker import OutboxWorker
 
@@ -81,9 +82,10 @@ def test_outbox_worker_sync_and_isolation():
         rec2 = db.record_attendance("user-002", 0.88, "AUTO", "test-kiosk", debounce_seconds=0)
 
         # Insert an enrollment record directly into outbox (which shouldn't block attendance sync)
+        now_iso = datetime.now(timezone.utc).isoformat()
         conn.execute(
-            "INSERT INTO outbox (event_id, type, payload, created_at, synced) VALUES (?, 'user_enrollment', ?, '2026-10-21T00:00:00Z', 0)",
-            ("enroll-001", json.dumps({"user_id": "enroll-001", "name": "New User"}))
+            "INSERT INTO outbox (event_id, type, payload, created_at, synced) VALUES (?, 'user_enrollment', ?, ?, 0)",
+            ("enroll-001", json.dumps({"user_id": "enroll-001", "name": "New User"}), now_iso)
         )
         conn.commit()
 
@@ -119,10 +121,61 @@ def test_outbox_worker_sync_and_isolation():
         enroll_row = cur.fetchone()
         assert enroll_row["synced"] == 1
 
+        # Test unrecognized scans sync with 0 attendance events
+        db.record_unrecognized("test-kiosk", 0.0, "fake-b64-snapshot")
+        mock_response_unrec = MagicMock()
+        mock_response_unrec.status_code = 200
+        with patch("requests.post", return_value=mock_response_unrec) as mock_post_unrec:
+            worker._sync_pending()
+            assert mock_post_unrec.called
+            unrec_json = mock_post_unrec.call_args[1]["json"]
+            assert len(unrec_json["scans"]) == 1
+
+        cur.execute("SELECT synced FROM outbox WHERE type = 'unrecognized_scan'")
+        unrec_row = cur.fetchone()
+        assert unrec_row["synced"] == 1
+
+        worker.stop()
+
+
+def test_outbox_partial_sync_retries():
+    """Verify that when server returns partial synced_ids, only successful events are marked synced."""
+    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+        conn = init_db(tmp.name)
+        db = Database(conn)
+
+        rec1 = db.record_attendance("user-001", 0.9, "AUTO", "test-kiosk", debounce_seconds=0)
+        rec2 = db.record_attendance("user-002", 0.88, "AUTO", "test-kiosk", debounce_seconds=0)
+
+        worker = OutboxWorker(tmp.name, MockConfig())
+
+        # Server only succeeded on rec1, rec2 failed
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "status": "ok",
+            "synced": 1,
+            "synced_ids": [rec1["event_id"]],
+            "total": 2,
+        }
+
+        with patch("requests.post", return_value=mock_response):
+            worker._sync_pending()
+
+        worker_conn = worker._get_connection()
+        cur = worker_conn.cursor()
+        cur.execute("SELECT event_id, synced FROM outbox WHERE type = 'attendance'")
+        rows = {r["event_id"]: r["synced"] for r in cur.fetchall()}
+
+        # rec1 must be synced, rec2 must remain unsynced for next retry!
+        assert rows[rec1["event_id"]] == 1
+        assert rows[rec2["event_id"]] == 0
+
         worker.stop()
 
 
 if __name__ == "__main__":
     test_first_in_last_out_and_debouncing()
     test_outbox_worker_sync_and_isolation()
+    test_outbox_partial_sync_retries()
     print("All First-In Last-Out and outbox tests passed successfully!")

@@ -2,14 +2,19 @@ package usecase
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"attendance-backend/internal/entity"
 	"attendance-backend/internal/ports"
+	"github.com/google/uuid"
 )
 
 type AttendanceUseCase struct {
@@ -17,6 +22,7 @@ type AttendanceUseCase struct {
 	auditRepo      ports.AuditRepository
 	userRepo       ports.UserRepository
 	settingsRepo   ports.SettingsRepository
+	enrollmentUC   *EnrollmentUseCase
 }
 
 func NewAttendanceUseCase(
@@ -32,6 +38,8 @@ func NewAttendanceUseCase(
 			uc.userRepo = v
 		case ports.SettingsRepository:
 			uc.settingsRepo = v
+		case *EnrollmentUseCase:
+			uc.enrollmentUC = v
 		}
 	}
 	return uc
@@ -142,8 +150,17 @@ func (uc *AttendanceUseCase) ListPairs(ctx context.Context, startDate, endDate, 
 	}
 
 	for _, p := range pairs {
-		if !p.IsManual && p.Status != "adjusted" && p.Status != "open" {
-			p.Status = CalculateAttendanceStatusWithConfig(p.CheckInTime, p.CheckOutTime, p.HoursWorked, false, startH, startM, minHrs)
+		if len(p.WorkDate) >= 10 {
+			p.WorkDate = p.WorkDate[:10]
+		}
+	}
+
+	// Only recalculate status if custom settings differ from defaults (08:30, 8.0 hrs)
+	if startH != 8 || startM != 30 || minHrs != 8.0 {
+		for _, p := range pairs {
+			if !p.IsManual && p.Status != "adjusted" && p.Status != "open" {
+				p.Status = CalculateAttendanceStatusWithConfig(p.CheckInTime, p.CheckOutTime, p.HoursWorked, false, startH, startM, minHrs)
+			}
 		}
 	}
 
@@ -151,11 +168,18 @@ func (uc *AttendanceUseCase) ListPairs(ctx context.Context, startDate, endDate, 
 	// When includeAbsent is requested and date is specified (e.g. today or date filter)
 	if includeAbsent && uc.userRepo != nil && startDate != "" && (startDate == endDate || endDate == "") {
 		evalDate := startDate
+		if len(evalDate) >= 10 {
+			evalDate = evalDate[:10]
+		}
 		users, err := uc.userRepo.List(ctx, false)
 		if err == nil {
 			userWithPairs := make(map[string]bool)
 			for _, p := range pairs {
-				if p.WorkDate == evalDate {
+				wDate := p.WorkDate
+				if len(wDate) >= 10 {
+					wDate = wDate[:10]
+				}
+				if wDate == evalDate {
 					userWithPairs[p.UserID] = true
 				}
 			}
@@ -203,6 +227,25 @@ func (uc *AttendanceUseCase) ListEvents(ctx context.Context, limit int) ([]*enti
 	return uc.attendanceRepo.ListEvents(ctx, limit)
 }
 
+func saveSnapshotFromB64(b64Data, filename string) (string, error) {
+	if b64Data == "" {
+		return "", nil
+	}
+	if idx := strings.Index(b64Data, ","); idx != -1 {
+		b64Data = b64Data[idx+1:]
+	}
+	data, err := base64.StdEncoding.DecodeString(b64Data)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Dir(filename)
+	_ = os.MkdirAll(dir, 0755)
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		return "", err
+	}
+	return filename, nil
+}
+
 // ProcessEvent processes an incoming attendance event and updates/creates attendance pairs
 func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.AttendanceEvent) error {
 	// 1. Check idempotency
@@ -215,17 +258,28 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		event.SyncedAt = time.Now().UTC()
 	}
 
-	// 2. Save event
-	if err := uc.attendanceRepo.SaveEvent(ctx, event); err != nil {
-		return err
+	// Save snapshot image if b64 provided
+	if event.SnapshotB64 != "" && event.SnapshotURL == "" {
+		filePath := filepath.Join("data/uploads/snapshots", fmt.Sprintf("%s.jpg", event.EventID))
+		if _, err := saveSnapshotFromB64(event.SnapshotB64, filePath); err == nil {
+			event.SnapshotURL = fmt.Sprintf("/api/uploads/snapshots/%s.jpg", event.EventID)
+		}
 	}
 
-	// 3. Date string YYYY-MM-DD
-	workDate := event.CreatedAt.Format("2006-01-02")
+	// 2. Date string YYYY-MM-DD in local Thailand timezone (Asia/Bangkok = UTC+7)
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	workDate := event.CreatedAt.In(loc).Format("2006-01-02")
 
-	// 4. Update or Create Daily Attendance Pair
+	// 3. Update or Create Daily Attendance Pair
 	pair, err := uc.attendanceRepo.FindOpenPair(ctx, event.UserID, workDate)
-	if err != nil || pair == nil {
+	if (err != nil || pair == nil) && (event.Direction == "OUT" || event.Direction == "AUTO") {
+		// Also check if there is an open pair from yesterday (e.g. overnight shift or crossing midnight)
+		yesterday := event.CreatedAt.In(loc).AddDate(0, 0, -1).Format("2006-01-02")
+		if prevOpen, err := uc.attendanceRepo.FindOpenPair(ctx, event.UserID, yesterday); err == nil && prevOpen != nil {
+			pair = prevOpen
+		}
+	}
+	if pair == nil {
 		// If event is OUT or AUTO, check if there is an existing pair today for this user
 		// To support First-In, Last-Out logic (re-scanning OUT updates checkout time)
 		if event.Direction == "OUT" || event.Direction == "AUTO" {
@@ -235,6 +289,9 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 					lastPair.UpdatedAt = now
 					lastPair.CheckOutEventID = &event.EventID
 					lastPair.CheckOutTime = &event.CreatedAt
+					if event.SnapshotURL != "" {
+						lastPair.CheckOutSnapshot = &event.SnapshotURL
+					}
 
 					if lastPair.CheckInTime != nil {
 						duration := event.CreatedAt.Sub(*lastPair.CheckInTime)
@@ -245,7 +302,7 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 						lastPair.HoursWorked = &hours
 					}
 					lastPair.Status = CalculateAttendanceStatus(lastPair.CheckInTime, lastPair.CheckOutTime, lastPair.HoursWorked, lastPair.IsManual)
-					return uc.attendanceRepo.UpdatePair(ctx, lastPair)
+					return uc.attendanceRepo.SaveEventAndPair(ctx, event, lastPair, true)
 				}
 			}
 		}
@@ -260,22 +317,31 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		if event.Direction == "OUT" {
 			newPair.CheckOutEventID = &event.EventID
 			newPair.CheckOutTime = &event.CreatedAt
+			if event.SnapshotURL != "" {
+				newPair.CheckOutSnapshot = &event.SnapshotURL
+			}
 			newPair.Status = CalculateAttendanceStatus(newPair.CheckInTime, newPair.CheckOutTime, nil, false)
 		} else {
 			newPair.CheckInEventID = &event.EventID
 			newPair.CheckInTime = &event.CreatedAt
+			if event.SnapshotURL != "" {
+				newPair.CheckInSnapshot = &event.SnapshotURL
+			}
 			newPair.Status = "open"
 		}
-		return uc.attendanceRepo.SavePair(ctx, newPair)
+		return uc.attendanceRepo.SaveEventAndPair(ctx, event, newPair, false)
 	}
 
-	// Existing pair
+	// Existing open pair
 	now := time.Now().UTC()
 	pair.UpdatedAt = now
 
 	if event.Direction == "OUT" || (event.Direction == "AUTO" && pair.CheckInEventID != nil) {
 		pair.CheckOutEventID = &event.EventID
 		pair.CheckOutTime = &event.CreatedAt
+		if event.SnapshotURL != "" {
+			pair.CheckOutSnapshot = &event.SnapshotURL
+		}
 
 		if pair.CheckInTime != nil {
 			duration := event.CreatedAt.Sub(*pair.CheckInTime)
@@ -289,10 +355,219 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 	} else if pair.CheckInEventID == nil {
 		pair.CheckInEventID = &event.EventID
 		pair.CheckInTime = &event.CreatedAt
+		if event.SnapshotURL != "" {
+			pair.CheckInSnapshot = &event.SnapshotURL
+		}
 		pair.Status = "open"
 	}
 
-	return uc.attendanceRepo.UpdatePair(ctx, pair)
+	return uc.attendanceRepo.SaveEventAndPair(ctx, event, pair, true)
+}
+
+func (uc *AttendanceUseCase) SaveUnrecognized(ctx context.Context, scan *entity.UnrecognizedScan) error {
+	if scan.ID == "" {
+		scan.ID = uuid.NewString()
+	}
+	if scan.CreatedAt.IsZero() {
+		scan.CreatedAt = time.Now().UTC()
+	}
+	if scan.Status == "" {
+		scan.Status = "pending"
+	}
+	if scan.SnapshotB64 != "" && scan.SnapshotURL == "" {
+		filePath := filepath.Join("data/uploads/snapshots/unrecognized", fmt.Sprintf("%s.jpg", scan.ID))
+		if _, err := saveSnapshotFromB64(scan.SnapshotB64, filePath); err == nil {
+			scan.SnapshotURL = fmt.Sprintf("/api/uploads/snapshots/unrecognized/%s.jpg", scan.ID)
+		}
+	}
+	return uc.attendanceRepo.SaveUnrecognized(ctx, scan)
+}
+
+func (uc *AttendanceUseCase) ListUnrecognized(ctx context.Context, limit int) ([]*entity.UnrecognizedScan, error) {
+	return uc.attendanceRepo.ListUnrecognized(ctx, limit)
+}
+
+func (uc *AttendanceUseCase) ResolveUnrecognized(ctx context.Context, adminID, id, userID, action, direction, workDate, scanTime string) error {
+	scan, err := uc.attendanceRepo.GetUnrecognizedByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if action == "assign" || action == "assign_attendance" {
+		if userID == "" {
+			return errors.New("user_id is required to assign unrecognized scan")
+		}
+		dir := direction
+		if dir == "" {
+			dir = "AUTO"
+		}
+		createdAt := scan.CreatedAt
+		if workDate != "" && scanTime != "" {
+			loc := time.FixedZone("Asia/Bangkok", 7*3600)
+			if t, err := time.ParseInLocation("2006-01-02 15:04", fmt.Sprintf("%s %s", workDate, scanTime), loc); err == nil {
+				createdAt = t.UTC()
+			}
+		}
+
+		// Create attendance event
+		ev := &entity.AttendanceEvent{
+			EventID:     uuid.NewString(),
+			UserID:      userID,
+			DeviceID:    scan.DeviceID,
+			Direction:   dir,
+			Confidence:  scan.Confidence,
+			SnapshotURL: scan.SnapshotURL,
+			CreatedAt:   createdAt,
+			SyncedAt:    time.Now().UTC(),
+		}
+		if err := uc.ProcessEvent(ctx, ev); err != nil {
+			return err
+		}
+		if err := uc.attendanceRepo.ResolveUnrecognized(ctx, id, userID, "resolved"); err != nil {
+			return err
+		}
+		if uc.auditRepo != nil {
+			var adminPtr *string
+			if adminID != "" {
+				adminPtr = &adminID
+			}
+			_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
+				AdminID:    adminPtr,
+				Action:     "RESOLVE_UNRECOGNIZED_SCAN",
+				TargetType: "attendance",
+				TargetID:   ev.EventID,
+				Detail:     fmt.Sprintf("Assigned unrecognized scan %s to user %s", id, userID),
+				CreatedAt:  time.Now().UTC(),
+			})
+		}
+		return nil
+	} else if action == "dismiss" {
+		return uc.attendanceRepo.ResolveUnrecognized(ctx, id, "", "dismissed")
+	}
+
+	return errors.New("invalid action")
+}
+
+func (uc *AttendanceUseCase) DeleteUnrecognized(ctx context.Context, id string) error {
+	return uc.attendanceRepo.DeleteUnrecognized(ctx, id)
+}
+
+type CreateUserFromScanDTO struct {
+	EmployeeID string `json:"employee_id" binding:"required"`
+	Title      string `json:"title"`
+	FirstName  string `json:"first_name" binding:"required"`
+	LastName   string `json:"last_name"`
+	Department string `json:"department"`
+	StartDate  string `json:"start_date"`
+	Direction  string `json:"direction"`
+	ScanTime   string `json:"scan_time"`
+	Reason     string `json:"reason"`
+}
+
+// CreateUserAndResolveUnrecognized registers a brand new employee using the captured face snapshot and registers their attendance
+func (uc *AttendanceUseCase) CreateUserAndResolveUnrecognized(ctx context.Context, adminID, id string, dto *CreateUserFromScanDTO) (*entity.User, error) {
+	if uc.userRepo == nil {
+		return nil, errors.New("user repository unavailable")
+	}
+
+	scan, err := uc.attendanceRepo.GetUnrecognizedByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("unrecognized scan not found: %w", err)
+	}
+
+	// 1. Read scan image data from disk if available
+	var imgBytes []byte
+	filePath := filepath.Join("data/uploads/snapshots/unrecognized", fmt.Sprintf("%s.jpg", scan.ID))
+	if data, err := os.ReadFile(filePath); err == nil && len(data) > 0 {
+		imgBytes = data
+	}
+
+	// 2. Prepare new user entity
+	newUserID := uuid.NewString()
+	fullName := strings.TrimSpace(fmt.Sprintf("%s %s %s", dto.Title, dto.FirstName, dto.LastName))
+	if fullName == "" {
+		fullName = strings.TrimSpace(fmt.Sprintf("%s %s", dto.FirstName, dto.LastName))
+	}
+	now := time.Now().UTC()
+	user := &entity.User{
+		ID:         newUserID,
+		EmployeeID: dto.EmployeeID,
+		Title:      dto.Title,
+		FirstName:  dto.FirstName,
+		LastName:   dto.LastName,
+		Name:       fullName,
+		Department: dto.Department,
+		Status:     "active",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Version:    1,
+	}
+	if dto.StartDate != "" {
+		user.StartDate = &dto.StartDate
+	}
+
+	// 3. Save primary avatar image
+	if len(imgBytes) > 0 {
+		avatarDir := "data/uploads/avatars"
+		_ = os.MkdirAll(avatarDir, 0755)
+		avatarFile := filepath.Join(avatarDir, fmt.Sprintf("%s.jpg", newUserID))
+		_ = os.WriteFile(avatarFile, imgBytes, 0644)
+		user.PhotoURL = fmt.Sprintf("/api/uploads/avatars/%s.jpg", newUserID)
+	}
+
+	if err := uc.userRepo.Create(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// 4. Create enrollment job so Kiosk computes ArcFace embedding
+	if uc.enrollmentUC != nil && len(imgBytes) > 0 {
+		_, _ = uc.enrollmentUC.CreateJobFromImages(ctx, newUserID, [][]byte{imgBytes}, []string{fmt.Sprintf("%s.jpg", newUserID)})
+	}
+
+	// 5. Create attendance event
+	dir := dto.Direction
+	if dir == "" {
+		dir = "IN"
+	}
+	createdAt := scan.CreatedAt
+	if dto.StartDate != "" && dto.ScanTime != "" {
+		loc := time.FixedZone("Asia/Bangkok", 7*3600)
+		if t, err := time.ParseInLocation("2006-01-02 15:04", fmt.Sprintf("%s %s", dto.StartDate, dto.ScanTime), loc); err == nil {
+			createdAt = t.UTC()
+		}
+	}
+	ev := &entity.AttendanceEvent{
+		EventID:     uuid.NewString(),
+		UserID:      newUserID,
+		DeviceID:    scan.DeviceID,
+		Direction:   dir,
+		Confidence:  scan.Confidence,
+		SnapshotURL: scan.SnapshotURL,
+		CreatedAt:   createdAt,
+		SyncedAt:    now,
+	}
+	_ = uc.ProcessEvent(ctx, ev)
+
+	// 6. Mark unrecognized scan as resolved
+	_ = uc.attendanceRepo.ResolveUnrecognized(ctx, id, newUserID, "resolved")
+
+	// 7. Audit log
+	if uc.auditRepo != nil {
+		var adminPtr *string
+		if adminID != "" {
+			adminPtr = &adminID
+		}
+		_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
+			AdminID:    adminPtr,
+			Action:     "CREATE_USER_FROM_UNRECOGNIZED_SCAN",
+			TargetType: "user",
+			TargetID:   newUserID,
+			Detail:     fmt.Sprintf("Created user %s (%s) from unrecognized scan %s", fullName, dto.EmployeeID, id),
+			CreatedAt:  now,
+		})
+	}
+
+	return user, nil
 }
 
 // ManualAddAttendance creates a manual attendance record with audited reason

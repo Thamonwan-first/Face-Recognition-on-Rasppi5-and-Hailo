@@ -13,7 +13,6 @@ MODELS=(
     "scrfd_2.5g.hef"
     "scrfd_10g.hef"
     "arcface_mobilefacenet.hef"
-    "yolov8n.hef"
 )
 
 echo "=== Hailo-8 Model Downloader ==="

@@ -130,33 +130,13 @@ class Camera:
         return frame
 
     def _generate_mock_frame(self) -> np.ndarray:
-        """Generate a realistic test frame with an animated face for testing."""
-        frame = np.full((self.height, self.width, 3), 40, dtype=np.uint8)
-
-        # Draw grid background
-        for x in range(0, self.width, 40):
-            cv2.line(frame, (x, 0), (x, self.height), (60, 60, 60), 1)
-        for y in range(0, self.height, 40):
-            cv2.line(frame, (0, y), (self.width, y), (60, 60, 60), 1)
-
-        # Draw a synthetic face avatar in center
-        cx, cy = self.width // 2, self.height // 2
-        cv2.ellipse(frame, (cx, cy), (80, 110), 0, 0, 360, (200, 180, 160), -1)
-        # Eyes
-        cv2.circle(frame, (cx - 30, cy - 20), 12, (255, 255, 255), -1)
-        cv2.circle(frame, (cx + 30, cy - 20), 12, (255, 255, 255), -1)
-        cv2.circle(frame, (cx - 30, cy - 20), 5, (50, 50, 50), -1)
-        cv2.circle(frame, (cx + 30, cy - 20), 5, (50, 50, 50), -1)
-        # Nose
-        cv2.line(frame, (cx, cy - 10), (cx, cy + 15), (150, 130, 110), 3)
-        # Mouth
-        cv2.ellipse(frame, (cx, cy + 45), (35, 15), 0, 0, 180, (80, 80, 180), -1)
-
+        """Generate a lightweight fallback test frame when no camera is connected."""
+        frame = np.full((self.height, self.width, 3), 45, dtype=np.uint8)
         cv2.putText(
-            frame, "MOCK CAMERA STREAM", (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2
+            frame, "NO CAMERA DETECTED (MOCK STREAM)", (30, self.height // 2),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2
         )
-        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        return frame
 
     def stop(self):
         """Stop camera and free resources."""

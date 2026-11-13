@@ -1,31 +1,53 @@
 """
 PyQt5 Touchscreen UI for Kiosk (Portrait / จอแนวตั้ง).
-Full-Screen Borderless Camera View + Modern Center Floating Glass Card.
+Full-Screen Borderless Camera View + Minimal Warm Cream Palette & Floating Card.
 """
 import sys
+import os
 import time
 import logging
 from datetime import datetime
 import numpy as np
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
-from PyQt5.QtGui import QImage, QPixmap, QFont
+from PyQt5.QtGui import QImage, QPixmap, QFont, QColor, QFontDatabase, QPainter, QPainterPath, QBrush, QPen
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel,
-    QVBoxLayout, QHBoxLayout, QFrame, QDialog, QSizePolicy
+    QVBoxLayout, QHBoxLayout, QFrame, QDialog, QSizePolicy,
+    QGraphicsDropShadowEffect
 )
 
 from workers.recognition_worker import RecognitionWorker
 
 logger = logging.getLogger(__name__)
 
-# Modern Deep Navy & Website Tech-Blue Palette (#0984e3)
-DARK_BG = "#0b1320"
-CARD_BG = "#131f33"
-BRAND_BLUE = "#0984e3"       # สีน้ำเงินหลักของเว็บไซต์
-BRAND_CYAN = "#74b9ff"       # สีฟ้าไฮไลต์
-TEXT_PRIMARY = "#f8fafc"
-TEXT_SECONDARY = "#94a3b8"
+# Typography: Kanit Google Font (โหลดจาก kiosk/ui/fonts/ อัตโนมัติ)
+FONT_FAMILY = "Kanit"
+
+
+def init_fonts():
+    """โหลดฟอนต์ Kanit เข้าสู่ระบบ QFontDatabase หากมีไฟล์อยู่ในโฟลเดอร์ fonts"""
+    fonts_dir = os.path.join(os.path.dirname(__file__), "fonts")
+    for font_file in ["Kanit-Regular.ttf", "Kanit-Medium.ttf", "Kanit-Bold.ttf"]:
+        path = os.path.join(fonts_dir, font_file)
+        if os.path.exists(path):
+            QFontDatabase.addApplicationFont(path)
+
+
+# Minimal Warm White & Cream Palette (โทนขาวครีม มินิมอล อบอุ่น เรียบหรู)
+WARM_CREAM_BG = "#F9F7F2"       # สีพื้นหลังขาวครีม (Warm Off-White / Alabaster)
+HEADER_BG = "#F3EFE8"           # สีแถบเวลาด้านบน (Soft Warm Sand Cream)
+HEADER_BORDER = "#E5DFD4"       # เส้นขอบล่างแถบเวลา
+CARD_BG = "rgba(255, 253, 249, 0.97)" # การ์ดป๊อปอัปขาวครีมละมุน
+CARD_BORDER = "#DDD5C7"         # เส้นขอบการ์ดโทนอุ่น เรียบหรู
+TEXT_PRIMARY = "#23201D"        # ข้อความหลัก สีชาร์โคลโทนอุ่น (Warm Deep Charcoal)
+TEXT_SECONDARY = "#5C564F"      # ข้อความรอง สีเทาโทนอุ่น (Warm Taupe)
+TEXT_MUTED = "#8A8277"          # ข้อความกำกับ สีทรายโทนอบอุ่น
+ACCENT_SUCCESS = "#2E6B4D"      # สีเขียวใบไม้อบอุ่นสำหรับสถานะบันทึกสำเร็จ (Warm Sage Green)
+
+THAI_DAYS = [
+    "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"
+]
 
 THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -33,50 +55,107 @@ THAI_MONTHS = [
 ]
 
 
+def make_circular_pixmap(image_path: str, size: int = 60) -> QPixmap | None:
+    """แปลงรูปภาพจาก path ให้เป็นวงกลมขอบมนเรียบสวยงาม"""
+    if not image_path or not os.path.exists(image_path):
+        return None
+    src = QPixmap(image_path)
+    if src.isNull():
+        return None
+    scaled = src.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    out = QPixmap(size, size)
+    out.fill(Qt.transparent)
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    path = QPainterPath()
+    path.addEllipse(0, 0, size, size)
+    painter.setClipPath(path)
+    x_off = (size - scaled.width()) // 2
+    y_off = (size - scaled.height()) // 2
+    painter.drawPixmap(x_off, y_off, scaled)
+    painter.end()
+    return out
+
+
+def make_monogram_pixmap(name: str, size: int = 60) -> QPixmap:
+    """สร้างวงกลมตัวอักษรย่อเมื่อไม่มีรูปโปรไฟล์"""
+    out = QPixmap(size, size)
+    out.fill(Qt.transparent)
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setBrush(QBrush(QColor(234, 230, 222)))
+    painter.setPen(QPen(QColor(216, 210, 198), 1.5))
+    painter.drawEllipse(1, 1, size - 2, size - 2)
+    painter.setPen(QPen(QColor(45, 42, 38)))
+    painter.setFont(QFont(FONT_FAMILY, 16, QFont.Bold))
+    initial = (name.strip()[0] if name.strip() else "?").upper()
+    painter.drawText(0, 0, size, size, Qt.AlignCenter, initial)
+    painter.end()
+    return out
+
+
 class AttendanceSuccessPopup(QDialog):
     """
-    ป๊อปอัปแจ้งผลการลงเวลาสำเร็จ ดีไซน์กระจกโมเดิร์น (Glassmorphism)
-    ขอบสีน้ำเงินเข้ากับเว็บไซต์ ปิดเองอัตโนมัติใน 2.5 วินาที
+    ป๊อปอัปแจ้งผลการลงเวลาสำเร็จ สไตล์มินิมอล โทนขาวครีม (Warm Minimalist Cream)
+    เงาฟุ้งนุ่มนวล ขอบมนเรียบหรู พร้อมรูปโปรไฟล์พนักงาน ปิดเองอัตโนมัติใน 2.5 วินาที
     """
-    def __init__(self, parent, name, direction_text, time_str, emp_id="", division=""):
+    def __init__(self, parent, name, direction_text, time_str, emp_id="", division="", photo_path=""):
         super().__init__(parent)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setFixedSize(420, 230)
+        self.setFixedSize(430, 275)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setContentsMargins(12, 12, 12, 12)
 
         card = QFrame(self)
         card.setStyleSheet(
             f"""
             QFrame {{
-                background-color: rgba(11, 19, 32, 0.94);
-                border: 2px solid {BRAND_BLUE};
+                background-color: {CARD_BG};
+                border: 1.5px solid {CARD_BORDER};
                 border-radius: 20px;
             }}
             """
         )
+
+        # เงาฟุ้งนุ่มนวล สไตล์ Minimal Elevation
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(35, 32, 29, 45))
+        shadow.setOffset(0, 6)
+        card.setGraphicsEffect(shadow)
+
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(22, 18, 22, 18)
-        layout.setSpacing(6)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(4)
 
         # 1. หัวข้อสถานะ
-        title = QLabel("✨ บันทึกเวลาสำเร็จ")
-        title.setFont(QFont("Sans", 15, QFont.Bold))
+        title = QLabel("บันทึกเวลาสำเร็จ")
+        title.setFont(QFont(FONT_FAMILY, 13, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(f"color: {BRAND_CYAN}; border: none; background: transparent;")
+        title.setStyleSheet(f"color: {ACCENT_SUCCESS}; border: none; background: transparent;")
         layout.addWidget(title)
 
-        # 2. ชื่อ-นามสกุล พร้อมคำนำหน้า
+        # 2. รูปโปรไฟล์พนักงาน (วงกลม)
+        avatar_lbl = QLabel()
+        avatar_lbl.setAlignment(Qt.AlignCenter)
+        avatar_lbl.setStyleSheet("border: none; background: transparent;")
+        pix = make_circular_pixmap(photo_path, size=58)
+        if pix is None:
+            pix = make_monogram_pixmap(name, size=58)
+        avatar_lbl.setPixmap(pix)
+        layout.addWidget(avatar_lbl)
+
+        # 3. ชื่อ-นามสกุล พร้อมคำนำหน้า
         name_lbl = QLabel(name)
-        name_lbl.setFont(QFont("Sans", 21, QFont.Bold))
+        name_lbl.setFont(QFont(FONT_FAMILY, 19, QFont.Bold))
         name_lbl.setAlignment(Qt.AlignCenter)
-        name_lbl.setStyleSheet("color: #ffffff; border: none; background: transparent;")
+        name_lbl.setStyleSheet(f"color: {TEXT_PRIMARY}; border: none; background: transparent;")
         name_lbl.setWordWrap(True)
         layout.addWidget(name_lbl)
 
-        # 3. รหัสพนักงาน และ สังกัดฝ่าย
+        # 4. รหัสพนักงาน และ สังกัดฝ่าย
         sub_items = []
         if emp_id:
             sub_items.append(f"รหัส: {emp_id}")
@@ -86,15 +165,15 @@ class AttendanceSuccessPopup(QDialog):
 
         if sub_text:
             sub_lbl = QLabel(sub_text)
-            sub_lbl.setFont(QFont("Sans", 12, QFont.Bold))
+            sub_lbl.setFont(QFont(FONT_FAMILY, 11))
             sub_lbl.setAlignment(Qt.AlignCenter)
-            sub_lbl.setStyleSheet(f"color: {BRAND_CYAN}; border: none; background: transparent;")
+            sub_lbl.setStyleSheet(f"color: {TEXT_MUTED}; border: none; background: transparent;")
             sub_lbl.setWordWrap(True)
             layout.addWidget(sub_lbl)
 
-        # 4. ทิศทางและเวลา
+        # 5. ทิศทางและเวลา
         time_lbl = QLabel(f"บันทึก: {direction_text} • เวลา {time_str} น.")
-        time_lbl.setFont(QFont("Sans", 12))
+        time_lbl.setFont(QFont(FONT_FAMILY, 11))
         time_lbl.setAlignment(Qt.AlignCenter)
         time_lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; border: none; background: transparent;")
         layout.addWidget(time_lbl)
@@ -121,9 +200,9 @@ class MainWindow(QMainWindow):
     """
     Kiosk Screen:
     - กล้องสดไร้ขอบ ขยายเต็มหน้าจอ (Full-Screen Camera)
-    - แถบเวลาด้านบน (Minimal Floating Top Bar)
+    - แถบเวลาด้านบน โทนขาวครีมมินิมอล (Warm Cream Minimal Header)
     - ไม่มีการ์ดล่างเกะกะสายตา
-    - แจ้งเตือนด้วย Floating Glass Card ตรงกลางจอ
+    - แจ้งเตือนด้วย Floating Minimal Card ตรงกลางจอ
     """
     def __init__(self, config, camera, detector, database):
         super().__init__()
@@ -135,7 +214,7 @@ class MainWindow(QMainWindow):
         self._active_popup = None
 
         self.setWindowTitle("Face Attendance Kiosk")
-        self.setStyleSheet(f"background-color: {DARK_BG}; color: {TEXT_PRIMARY};")
+        self.setStyleSheet(f"background-color: {WARM_CREAM_BG}; color: {TEXT_PRIMARY};")
 
         # Kiosk Lock: ไร้ขอบหน้าต่าง ล็อกให้อยู่บนสุดเสมอ ป้องกันคนปัดหรือย่อหน้าต่าง
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -192,24 +271,25 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── 1. ส่วนเวลาลอยด้านบน (Minimal Header) ────────────────
+        # ── 1. ส่วนเวลาและวันที่ลอยด้านบน (Centered Stacked Minimal Header) ───────
         time_bar = QFrame()
         time_bar.setStyleSheet(
-            f"background-color: {CARD_BG}; border-bottom: 1px solid rgba(255,255,255,0.08);"
+            f"background-color: {HEADER_BG}; border-bottom: 1px solid {HEADER_BORDER};"
         )
-        t_layout = QHBoxLayout(time_bar)
-        t_layout.setContentsMargins(16, 8, 16, 8)
+        t_layout = QVBoxLayout(time_bar)
+        t_layout.setContentsMargins(16, 12, 16, 10)
+        t_layout.setSpacing(2)
 
         self.clock_label = QLabel("00:00:00")
-        self.clock_label.setFont(QFont("Monospace", 22, QFont.Bold))
-        self.clock_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
+        self.clock_label.setFont(QFont(FONT_FAMILY, 28, QFont.Bold))
+        self.clock_label.setAlignment(Qt.AlignCenter)
+        self.clock_label.setStyleSheet(f"color: {TEXT_PRIMARY}; border: none; background: transparent;")
         t_layout.addWidget(self.clock_label)
 
-        t_layout.addStretch()
-
         self.date_label = QLabel("")
-        self.date_label.setFont(QFont("Sans", 12))
-        self.date_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        self.date_label.setFont(QFont(FONT_FAMILY, 12))
+        self.date_label.setAlignment(Qt.AlignCenter)
+        self.date_label.setStyleSheet(f"color: {TEXT_SECONDARY}; border: none; background: transparent;")
         t_layout.addWidget(self.date_label)
 
         layout.addWidget(time_bar)
@@ -217,7 +297,7 @@ class MainWindow(QMainWindow):
         # ── 2. หน้าจอกล้องสดเต็มจอ (Full-Screen Borderless Camera) ──
         self.cam_label = QLabel("กำลังเริ่มกล้อง...")
         self.cam_label.setAlignment(Qt.AlignCenter)
-        self.cam_label.setStyleSheet("background-color: #000000; border: none;")
+        self.cam_label.setStyleSheet(f"background-color: {WARM_CREAM_BG}; color: {TEXT_MUTED}; border: none;")
         self.cam_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.cam_label.setMinimumSize(1, 1)
 
@@ -233,7 +313,8 @@ class MainWindow(QMainWindow):
         now = datetime.now()
         self.clock_label.setText(now.strftime("%H:%M:%S"))
         thai_m = THAI_MONTHS[now.month] if 1 <= now.month <= 12 else ""
-        self.date_label.setText(f"{now.day} {thai_m} {now.year + 543}")
+        day_name = THAI_DAYS[now.weekday()]
+        self.date_label.setText(f"{day_name}ที่ {now.day} {thai_m} {now.year + 543}")
 
     def _start_worker(self):
         self.worker = RecognitionWorker(
@@ -275,9 +356,9 @@ class MainWindow(QMainWindow):
         )
         self.cam_label.setPixmap(pix)
 
-    @pyqtSlot(str, float, str, str, str)
-    def _on_recognized(self, name, conf, direction, emp_id, division):
-        """เมื่อสแกนเจอพนักงาน: แสดง Floating Glass Card ตรงกลางจอ"""
+    @pyqtSlot(str, float, str, str, str, str)
+    def _on_recognized(self, name, conf, direction, emp_id, division, photo_path):
+        """เมื่อสแกนเจอพนักงาน: แสดง Floating Glass Card ตรงกลางจอ พร้อมรูปโปรไฟล์"""
         dir_text = "เข้างาน" if direction == "IN" else "ออกงาน"
         now_time = datetime.now().strftime("%H:%M:%S")
 
@@ -290,7 +371,7 @@ class MainWindow(QMainWindow):
 
         # แสดง Floating Glass Card ตรงกลางจอ
         self._active_popup = AttendanceSuccessPopup(
-            self, name, dir_text, now_time, emp_id=emp_id, division=division
+            self, name, dir_text, now_time, emp_id=emp_id, division=division, photo_path=photo_path
         )
         self._active_popup.show()
 
@@ -311,8 +392,9 @@ class MainWindow(QMainWindow):
 
 
 def create_app(config, camera, detector, database):
+    init_fonts()
     app = QApplication(sys.argv)
     app.setApplicationName("FaceAttendance")
-    app.setFont(QFont("Sans", 11))
+    app.setFont(QFont(FONT_FAMILY, 11))
     window = MainWindow(config, camera, detector, database)
     return app, window

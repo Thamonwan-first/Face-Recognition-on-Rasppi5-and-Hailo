@@ -60,45 +60,53 @@ class OutboxWorker:
     def _sync_pending(self):
         conn = self._get_connection()
         cur = conn.cursor()
-        # Only query attendance events for /sync/events endpoint
+        headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
+        ssl_verify = getattr(self.config, "ssl_verify", False)
+
+        # 1. Sync Attendance Events
         cur.execute(
             "SELECT id, payload FROM outbox WHERE synced = 0 AND type = 'attendance' ORDER BY created_at ASC LIMIT 50"
         )
         rows = cur.fetchall()
-        if not rows:
-            return
+        if rows:
+            events = []
+            valid_row_ids = []
+            for r in rows:
+                try:
+                    payload = json.loads(r["payload"]) if r["payload"] else None
+                    if payload and "event_id" in payload and "created_at" in payload:
+                        events.append(payload)
+                        valid_row_ids.append(r["id"])
+                except Exception as e:
+                    logger.warning("Invalid JSON in outbox id %s: %s", r["id"], e)
 
-        events = []
-        valid_row_ids = []
-        for r in rows:
-            try:
-                payload = json.loads(r["payload"]) if r["payload"] else None
-                if payload and "event_id" in payload and "created_at" in payload:
-                    events.append(payload)
-                    valid_row_ids.append(r["id"])
-            except Exception as e:
-                logger.warning("Invalid JSON in outbox id %s: %s", r["id"], e)
-
-        headers = self.config.get_headers() if hasattr(self.config, "get_headers") else {"X-API-Key": self.config.api_key, "Content-Type": "application/json"}
-        ssl_verify = getattr(self.config, "ssl_verify", False)
-        # 1. Sync Attendance Events
-        if events:
-            url = self.config.get_url("/sync/events") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/events"
-            try:
-                res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=ssl_verify)
-                if res.status_code == 200:
-                    cur.execute(
-                        f"UPDATE outbox SET synced = 1 WHERE id IN ({','.join(['?']*len(valid_row_ids))})",
-                        valid_row_ids
-                    )
-                    # Retention cleanup: purge synced outbox records older than 7 days to preserve SD card storage
-                    cur.execute(
-                        "DELETE FROM outbox WHERE synced = 1 AND created_at < datetime('now', '-7 days')"
-                    )
-                    conn.commit()
-                    logger.info("Successfully synced %d events to server", len(events))
-            except Exception as e:
-                logger.debug("Server sync unreachable: %s", e)
+            if events:
+                url = self.config.get_url("/sync/events") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/events"
+                try:
+                    res = requests.post(url, json={"events": events}, headers=headers, timeout=5, verify=ssl_verify)
+                    if res.status_code == 200:
+                        try:
+                            data = res.json()
+                        except Exception:
+                            data = {}
+                        synced_ids = data.get("synced_ids") if isinstance(data, dict) else None
+                        if isinstance(synced_ids, list):
+                            if synced_ids:
+                                cur.execute(
+                                    f"UPDATE outbox SET synced = 1 WHERE event_id IN ({','.join(['?']*len(synced_ids))})",
+                                    synced_ids
+                                )
+                                conn.commit()
+                                logger.info("Successfully synced %d/%d events to server", len(synced_ids), len(events))
+                        else:
+                            cur.execute(
+                                f"UPDATE outbox SET synced = 1 WHERE id IN ({','.join(['?']*len(valid_row_ids))})",
+                                valid_row_ids
+                            )
+                            conn.commit()
+                            logger.info("Successfully synced %d events to server", len(events))
+                except Exception as e:
+                    logger.debug("Server sync unreachable: %s", e)
 
         # 2. Sync Kiosk User Enrollments to Server
         cur.execute(
@@ -130,3 +138,40 @@ class OutboxWorker:
                     logger.info("Successfully synced Kiosk enrollment to server: %s (%s)", p.get("name"), p.get("user_id"))
             except Exception as e:
                 logger.debug("Enrollment sync error: %s", e)
+
+        # 3. Sync Unrecognized Scans to Server
+        cur.execute(
+            "SELECT id, payload FROM outbox WHERE synced = 0 AND type = 'unrecognized_scan' ORDER BY created_at ASC LIMIT 20"
+        )
+        unrec_rows = cur.fetchall()
+        if unrec_rows:
+            unrec_scans = []
+            valid_unrec_ids = []
+            for ur in unrec_rows:
+                try:
+                    payload = json.loads(ur["payload"]) if ur["payload"] else None
+                    if payload and "snapshot_b64" in payload:
+                        unrec_scans.append(payload)
+                        valid_unrec_ids.append(ur["id"])
+                except Exception as e:
+                    logger.warning("Invalid JSON in outbox id %s: %s", ur["id"], e)
+            if unrec_scans:
+                url = self.config.get_url("/sync/unrecognized") if hasattr(self.config, "get_url") else f"{self.config.server_url.rstrip('/')}/sync/unrecognized"
+                try:
+                    res = requests.post(url, json={"scans": unrec_scans}, headers=headers, timeout=5, verify=ssl_verify)
+                    if res.status_code == 200:
+                        cur.execute(
+                            f"UPDATE outbox SET synced = 1 WHERE id IN ({','.join(['?']*len(valid_unrec_ids))})",
+                            valid_unrec_ids
+                        )
+                        conn.commit()
+                        logger.info("Successfully synced %d unrecognized scan(s) to server", len(unrec_scans))
+                except Exception as e:
+                    logger.debug("Unrecognized scans sync unreachable: %s", e)
+
+        # 4. Retention cleanup: purge synced outbox records older than 7 days to preserve SD card storage
+        try:
+            cur.execute("DELETE FROM outbox WHERE synced = 1 AND created_at < datetime('now', '-7 days')")
+            conn.commit()
+        except Exception as e:
+            logger.debug("Outbox retention cleanup error: %s", e)

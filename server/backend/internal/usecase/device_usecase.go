@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"attendance-backend/internal/entity"
@@ -130,15 +131,17 @@ func (uc *DeviceUseCase) AuthenticateDevice(ctx context.Context, apiKey string) 
 		return device, nil
 	}
 
-	// Backward compatibility fallback for legacy bcrypt keys
+	// Backward compatibility fallback: only test devices that actually contain a legacy bcrypt hash ($2a$/$2b$)
 	devices, err := uc.deviceRepo.List(ctx)
 	if err != nil {
 		return nil, entity.ErrUnauthorized
 	}
 
 	for _, dev := range devices {
-		if dev.Status != "revoked" && hasher.CheckPassword(apiKey, dev.ApiKeyHash) {
-			return dev, nil
+		if dev.Status != "revoked" && (strings.HasPrefix(dev.ApiKeyHash, "$2a$") || strings.HasPrefix(dev.ApiKeyHash, "$2b$")) {
+			if hasher.CheckPassword(apiKey, dev.ApiKeyHash) {
+				return dev, nil
+			}
 		}
 	}
 	return nil, entity.ErrUnauthorized

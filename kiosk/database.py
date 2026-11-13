@@ -40,6 +40,13 @@ def init_db(db_path: str | Path) -> sqlite3.Connection:
     else:
         logger.warning("schema.sql not found at %s", SCHEMA_FILE)
 
+    # Migration: ensure photo_path column exists
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN photo_path TEXT;")
+        conn.commit()
+    except Exception:
+        pass
+
     return conn
 
 
@@ -52,7 +59,7 @@ class Database:
     def load_active_gallery(self) -> list[dict]:
         """Load all active users and 512-d embeddings into RAM."""
         sql = """
-            SELECT u.id AS user_id, u.name, u.employee_id, u.department, e.embedding
+            SELECT u.id AS user_id, u.name, u.employee_id, u.department, u.photo_path, e.embedding
             FROM users u
             JOIN user_embeddings e ON u.id = e.user_id
             WHERE u.status = 'active' AND u.deleted_at IS NULL
@@ -73,6 +80,7 @@ class Database:
                     "name": r["name"],
                     "employee_id": r["employee_id"] or "",
                     "department": r["department"] or "",
+                    "photo_path": r["photo_path"] or "",
                     "embedding": emb,
                 })
         logger.info("Loaded %d face embeddings into RAM gallery", len(gallery))
@@ -133,6 +141,7 @@ class Database:
         device_id: str,
         debounce_seconds: int = 30,
         clock_synced: bool = False,
+        snapshot_b64: str = "",
     ) -> dict | None:
         """Atomically record event in attendance_events and outbox using First-In, Last-Out."""
         if self.is_debounced(user_id, debounce_seconds):
@@ -149,6 +158,7 @@ class Database:
             "direction": actual_direction,
             "confidence": round(float(confidence), 4),
             "clock_synced": bool(clock_synced),
+            "snapshot_b64": snapshot_b64,
             "created_at": now_iso,
         }
 
@@ -174,6 +184,38 @@ class Database:
         except Exception as e:
             self.conn.rollback()
             logger.error("Failed to record attendance: %s", e)
+            raise e
+
+    def record_unrecognized(
+        self,
+        device_id: str,
+        confidence: float,
+        snapshot_b64: str,
+    ) -> dict:
+        """Record an unrecognized face scan in outbox for review by HR on dashboard."""
+        event_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        payload = {
+            "id": event_id,
+            "device_id": device_id,
+            "confidence": round(float(confidence), 4),
+            "snapshot_b64": snapshot_b64,
+            "created_at": now_iso,
+        }
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
+                VALUES (?, 'unrecognized_scan', ?, ?, 0, 0)
+                """,
+                (event_id, json.dumps(payload), now_iso),
+            )
+            self.conn.commit()
+            return payload
+        except Exception as e:
+            self.conn.rollback()
+            logger.error("Failed to record unrecognized scan: %s", e)
             raise e
 
     def register_user(

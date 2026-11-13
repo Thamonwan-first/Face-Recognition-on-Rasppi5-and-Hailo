@@ -44,10 +44,7 @@ type HeartbeatDTO struct {
 
 func (uc *SyncUseCase) Heartbeat(ctx context.Context, deviceID string, dto *HeartbeatDTO) error {
 	now := time.Now().UTC()
-	_ = uc.deviceRepo.UpdateStatus(ctx, deviceID, "online", now)
-	if dto.IPAddress != "" {
-		_ = uc.deviceRepo.UpdateIPAddress(ctx, deviceID, dto.IPAddress)
-	}
+	_ = uc.deviceRepo.UpdateStatusAndIP(ctx, deviceID, "online", dto.IPAddress, now)
 
 	state := &entity.DeviceState{
 		DeviceID:       deviceID,
@@ -72,6 +69,7 @@ type UserSyncItem struct {
 	Department   string  `json:"department"`
 	Status       string  `json:"status"`
 	Version      int     `json:"version"`
+	PhotoURL     *string `json:"photo_url,omitempty"`
 	EmbeddingB64 *string `json:"embedding_b64"`
 }
 
@@ -88,18 +86,8 @@ func (uc *SyncUseCase) GetUsersSince(ctx context.Context, sinceVersion int) (*Us
 
 	latestV, _ := uc.userRepo.GetLatestVersion(ctx)
 
-	nowStr := time.Now().Format("2006-01-02")
 	items := make([]*UserSyncItem, 0, len(users))
 	for _, u := range users {
-		effectiveStatus := u.Status
-		// Check employment period
-		if u.StartDate != nil && *u.StartDate != "" && *u.StartDate > nowStr {
-			effectiveStatus = "inactive" // Not started yet
-		}
-		if u.EndDate != nil && *u.EndDate != "" && *u.EndDate < nowStr {
-			effectiveStatus = "inactive" // Contract expired
-		}
-
 		item := &UserSyncItem{
 			ID:         u.ID,
 			EmployeeID: u.EmployeeID,
@@ -108,12 +96,15 @@ func (uc *SyncUseCase) GetUsersSince(ctx context.Context, sinceVersion int) (*Us
 			LastName:   u.LastName,
 			Name:       u.Name,
 			Department: u.Department,
-			Status:     effectiveStatus,
+			Status:     u.Status,
 			Version:    u.Version,
+		}
+		if u.PhotoURL != "" {
+			item.PhotoURL = &u.PhotoURL
 		}
 
 		// Only include embedding vector if the user is currently active
-		if effectiveStatus == "active" && len(u.RawEmbedding) > 0 {
+		if u.Status == "active" && len(u.RawEmbedding) > 0 {
 			b64 := base64.StdEncoding.EncodeToString(u.RawEmbedding)
 			item.EmbeddingB64 = &b64
 		}
@@ -172,7 +163,9 @@ func (uc *SyncUseCase) SaveKioskEnrollment(ctx context.Context, deviceID string,
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
-		_ = uc.userRepo.Create(ctx, user)
+		if err := uc.userRepo.Create(ctx, user); err != nil {
+			return err
+		}
 	} else {
 		user.Name = dto.Name
 		if dto.EmployeeID != "" {
@@ -180,12 +173,17 @@ func (uc *SyncUseCase) SaveKioskEnrollment(ctx context.Context, deviceID string,
 		}
 		user.Version = newVersion
 		user.UpdatedAt = now
-		_ = uc.userRepo.Update(ctx, user)
+		if err := uc.userRepo.Update(ctx, user); err != nil {
+			return err
+		}
 	}
 
 	if dto.EmbeddingB64 != "" {
 		rawEmb, err := base64.StdEncoding.DecodeString(dto.EmbeddingB64)
-		if err == nil && len(rawEmb) > 0 {
+		if err != nil {
+			return err
+		}
+		if len(rawEmb) > 0 {
 			emb := &entity.UserEmbedding{
 				ID:           uuid.NewString(),
 				UserID:       user.ID,
@@ -196,18 +194,31 @@ func (uc *SyncUseCase) SaveKioskEnrollment(ctx context.Context, deviceID string,
 				QualityScore: dto.QualityScore,
 				CreatedAt:    now,
 			}
-			_ = uc.userRepo.SaveEmbedding(ctx, emb)
+			if err := uc.userRepo.SaveEmbedding(ctx, emb); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func (uc *SyncUseCase) ProcessAttendanceEvents(ctx context.Context, deviceID string, events []*entity.AttendanceEvent) (int, error) {
-	count := 0
+func (uc *SyncUseCase) ProcessAttendanceEvents(ctx context.Context, deviceID string, events []*entity.AttendanceEvent) ([]string, error) {
+	syncedIDs := make([]string, 0, len(events))
 	for _, ev := range events {
 		ev.DeviceID = deviceID
 		if err := uc.attendanceUC.ProcessEvent(ctx, ev); err == nil {
+			syncedIDs = append(syncedIDs, ev.EventID)
+		}
+	}
+	return syncedIDs, nil
+}
+
+func (uc *SyncUseCase) ProcessUnrecognizedScans(ctx context.Context, deviceID string, scans []*entity.UnrecognizedScan) (int, error) {
+	count := 0
+	for _, s := range scans {
+		s.DeviceID = deviceID
+		if err := uc.attendanceUC.SaveUnrecognized(ctx, s); err == nil {
 			count++
 		}
 	}

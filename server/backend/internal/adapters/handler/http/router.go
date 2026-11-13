@@ -46,6 +46,10 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "attendance-backend-go", "architecture": "clean-architecture"})
 	})
 
+	// Static file serving for uploads (avatars & snapshots)
+	r.Static("/api/uploads", "data/uploads")
+	r.Static("/uploads", "data/uploads")
+
 	// Public Auth endpoints
 	authGroup := r.Group("/auth")
 	{
@@ -86,6 +90,10 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 			attendance.GET("/events", handlers.Attendance.ListEvents)
 			attendance.POST("/manual", handlers.Attendance.ManualAdd)
 			attendance.PUT("/pairs/:id", handlers.Attendance.ManualEdit)
+			attendance.GET("/unrecognized", handlers.Attendance.ListUnrecognized)
+			attendance.POST("/unrecognized/:id/resolve", handlers.Attendance.ResolveUnrecognized)
+			attendance.POST("/unrecognized/:id/create-user", handlers.Attendance.CreateUserFromUnrecognized)
+			attendance.DELETE("/unrecognized/:id", handlers.Attendance.DeleteUnrecognized)
 		}
 
 		// Devices
@@ -145,6 +153,7 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 		g.POST("/enrollment", handlers.Sync.KioskEnrollment)
 		g.GET("/enrollment/claim", handlers.Enrollment.Claim)
 		g.POST("/enrollment/result", handlers.Enrollment.Result)
+		g.POST("/unrecognized", handlers.Sync.SyncUnrecognized)
 	}
 
 	// Mount on /sync and /api/sync for Kiosk compatibility

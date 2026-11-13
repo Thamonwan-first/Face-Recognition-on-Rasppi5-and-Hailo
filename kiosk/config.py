@@ -1,12 +1,33 @@
 """
 Configuration loader for Kiosk.
-Reads from config.yaml (preferred) or .env fallback.
+Reads from .env (primary for device credentials) and config.yaml (optional overrides).
 """
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
 
 KIOSK_ROOT = Path(__file__).resolve().parent
+
+# 1. Automatically load .env file if present
+def _load_env_file():
+    env_file = KIOSK_ROOT / ".env"
+    if env_file.is_file():
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    # Set in os.environ so os.getenv can access it
+                    if k:
+                        os.environ.setdefault(k, v)
+        except Exception as e:
+            print(f"Warning: Failed to parse {env_file}: {e}")
+
+_load_env_file()
 
 try:
     import yaml
@@ -17,10 +38,7 @@ except ImportError:
 
 def load_raw_config() -> dict:
     cfg_file = KIOSK_ROOT / "config.yaml"
-    if not cfg_file.exists():
-        cfg_file = KIOSK_ROOT / "config.example.yaml"
-
-    if YAML_AVAILABLE and cfg_file.exists():
+    if YAML_AVAILABLE and cfg_file.is_file():
         try:
             with open(cfg_file, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
@@ -36,13 +54,13 @@ _RAW = load_raw_config()
 
 @dataclass(frozen=True)
 class KioskConfig:
-    device_id: str = _RAW.get("device", {}).get("id", os.getenv("DEVICE_ID", "kiosk-01"))
-    device_name: str = _RAW.get("device", {}).get("name", "ตู้บันทึกเวลา")
-    device_direction: str = _RAW.get("device", {}).get("direction", os.getenv("DEVICE_DIRECTION", "AUTO"))
+    device_id: str = os.getenv("DEVICE_ID") or _RAW.get("device", {}).get("id", "kiosk-01")
+    device_name: str = os.getenv("DEVICE_NAME") or _RAW.get("device", {}).get("name", "ตู้บันทึกเวลา")
+    device_direction: str = os.getenv("DEVICE_DIRECTION") or _RAW.get("device", {}).get("direction", "AUTO")
 
-    server_url: str = _RAW.get("server", {}).get("url", os.getenv("SERVER_URL", "https://localhost:8443"))
-    api_key: str = _RAW.get("server", {}).get("api_key", os.getenv("API_KEY", ""))
-    ca_cert: str = _RAW.get("server", {}).get("ca_cert", os.getenv("CA_CERT", ""))
+    server_url: str = os.getenv("SERVER_URL") or _RAW.get("server", {}).get("url", "https://localhost:8443")
+    api_key: str = os.getenv("API_KEY") or _RAW.get("server", {}).get("api_key", "")
+    ca_cert: str = os.getenv("CA_CERT") or _RAW.get("server", {}).get("ca_cert", "")
 
     @property
     def ssl_verify(self):

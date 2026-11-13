@@ -21,6 +21,7 @@ export default function DevicesPage() {
   const [formData, setFormData] = useState(INITIAL_DEVICE_FORM);
   const [newKeyData, setNewKeyData] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [copiedEnv, setCopiedEnv] = useState(false);
 
   // Fetch devices status list with auto-refresh every 3 seconds
   const { data: devices, isLoading, error } = useQuery({
@@ -80,6 +81,15 @@ export default function DevicesPage() {
       navigator.clipboard.writeText(newKeyData.apiKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
+  const copyEnvSnippet = () => {
+    if (newKeyData) {
+      const snippet = `DEVICE_ID=${newKeyData.deviceId}\nSERVER_URL=${window.location.protocol}//${window.location.hostname}:8443\nAPI_KEY=${newKeyData.apiKey}`;
+      navigator.clipboard.writeText(snippet);
+      setCopiedEnv(true);
+      setTimeout(() => setCopiedEnv(false), 2500);
     }
   };
 
@@ -175,11 +185,23 @@ export default function DevicesPage() {
 
             <div style={{ borderTop: '1px solid var(--border-color, #e5e7eb)', paddingTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                className="btn-danger"
-                style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                className="btn btn-danger"
+                style={{
+                  fontSize: '0.82rem',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontWeight: 500,
+                }}
+                disabled={deleteMutation.isPending}
                 onClick={() => handleDeleteDevice(device)}
               >
-                ลบอุปกรณ์
+                {deleteMutation.isPending ? 'กำลังลบ...' : 'ลบอุปกรณ์'}
               </button>
             </div>
           </div>
@@ -286,14 +308,14 @@ export default function DevicesPage() {
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
-                  className="btn-secondary"
+                  className="btn btn-secondary"
                   onClick={() => setShowAddModal(false)}
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary"
+                  className="btn btn-primary"
                   disabled={registerMutation.isPending}
                 >
                   {registerMutation.isPending ? 'กำลังบันทึก...' : 'ลงทะเบียน'}
@@ -317,7 +339,7 @@ export default function DevicesPage() {
             zIndex: 110,
           }}
         >
-          <div className="login-card" style={{ maxWidth: '580px', width: '92%' }}>
+          <div className="login-card" style={{ maxWidth: '580px', width: '92%', boxSizing: 'border-box' }}>
             <h3 style={{ color: 'var(--primary, #2563eb)', marginBottom: '0.5rem' }}>
               ลงทะเบียนอุปกรณ์สำเร็จ!
             </h3>
@@ -340,13 +362,15 @@ export default function DevicesPage() {
               <div
                 style={{
                   fontFamily: 'monospace',
-                  fontSize: '0.95rem',
+                  fontSize: '0.9rem',
                   fontWeight: 600,
                   wordBreak: 'break-all',
+                  overflowWrap: 'anywhere',
                   color: '#0f172a',
                   background: '#e2e8f0',
                   padding: '6px 10px',
                   borderRadius: '4px',
+                  userSelect: 'all',
                 }}
               >
                 {newKeyData.apiKey}
@@ -363,29 +387,54 @@ export default function DevicesPage() {
                 fontSize: '0.85rem',
               }}
             >
-              <strong>คำแนะนำการตั้งค่าใน <code>kiosk/.env</code>:</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                <strong>คำแนะนำการตั้งค่าใน <code>kiosk/.env</code> (แก้ไฟล์นี้ไฟล์เดียว):</strong>
+                <button
+                  type="button"
+                  onClick={copyEnvSnippet}
+                  style={{
+                    fontSize: '0.75rem',
+                    background: '#dbeafe',
+                    color: '#1d4ed8',
+                    border: '1px solid #93c5fd',
+                    borderRadius: '4px',
+                    padding: '3px 8px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  {copiedEnv ? '✓ คัดลอก .env แล้ว' : 'คัดลอก .env'}
+                </button>
+              </div>
               <pre
                 style={{
                   margin: '0.5rem 0 0',
                   fontFamily: 'monospace',
                   color: '#1e3a8a',
                   whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  overflowWrap: 'anywhere',
+                  background: '#ffffff',
+                  padding: '8px 10px',
+                  borderRadius: '4px',
+                  border: '1px solid #dbeafe',
+                  fontSize: '0.82rem',
                 }}
               >
-                {`DEVICE_ID=${newKeyData.deviceId}\nSERVER_URL=http://172.22.1.33:8443\nAPI_KEY=${newKeyData.apiKey}`}
+                {`DEVICE_ID=${newKeyData.deviceId}\nSERVER_URL=${window.location.protocol}//${window.location.hostname}:8443\nAPI_KEY=${newKeyData.apiKey}`}
               </pre>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button
-                className="btn-primary"
+                className="btn btn-primary"
                 onClick={copyApiKey}
-                style={{ minWidth: '120px' }}
+                style={{ minWidth: '130px' }}
               >
-                {copied ? '✓ คัดลอกแล้ว' : 'คัดลอก API Key'}
+                {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกเฉพาะ API Key'}
               </button>
               <button
-                className="btn-secondary"
+                className="btn btn-secondary"
                 onClick={() => setNewKeyData(null)}
               >
                 ปิดหน้าต่าง

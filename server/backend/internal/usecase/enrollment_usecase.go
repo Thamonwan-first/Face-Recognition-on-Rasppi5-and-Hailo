@@ -89,6 +89,20 @@ func (uc *EnrollmentUseCase) CreateJobFromImages(ctx context.Context, userID str
 		return nil, err
 	}
 
+	// Immediately cache primary image as user's profile avatar
+	if len(imagesData) > 0 && len(imagesData[0]) > 0 {
+		avatarDir := "data/uploads/avatars"
+		_ = os.MkdirAll(avatarDir, 0755)
+		avatarFilePath := filepath.Join(avatarDir, fmt.Sprintf("%s.jpg", userID))
+		_ = os.WriteFile(avatarFilePath, imagesData[0], 0644)
+
+		if u, err := uc.userRepo.GetByID(ctx, userID); err == nil && u != nil {
+			u.PhotoURL = fmt.Sprintf("/api/uploads/avatars/%s.jpg", userID)
+			u.UpdatedAt = now
+			_ = uc.userRepo.Update(ctx, u)
+		}
+	}
+
 	return job, nil
 }
 
@@ -156,7 +170,10 @@ func (uc *EnrollmentUseCase) SubmitJobResult(ctx context.Context, jobID, deviceI
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	_ = uc.userRepo.SaveEmbedding(ctx, emb)
+	if err := uc.userRepo.SaveEmbedding(ctx, emb); err != nil {
+		_ = uc.enrollmentRepo.UpdateJobStatus(ctx, jobID, "failed")
+		return fmt.Errorf("failed to save user embedding: %w", err)
+	}
 	_ = uc.enrollmentRepo.UpdateJobStatus(ctx, jobID, "done")
 
 	// PDPA: Clean up temporary enrollment image files
@@ -171,6 +188,9 @@ func (uc *EnrollmentUseCase) SubmitJobResult(ctx context.Context, jobID, deviceI
 	if err == nil && user != nil {
 		latestV, _ := uc.userRepo.GetLatestVersion(ctx)
 		user.Version = latestV + 1
+		if user.PhotoURL == "" {
+			user.PhotoURL = fmt.Sprintf("/api/uploads/avatars/%s.jpg", job.UserID)
+		}
 		user.UpdatedAt = time.Now().UTC()
 		_ = uc.userRepo.Update(ctx, user)
 	}

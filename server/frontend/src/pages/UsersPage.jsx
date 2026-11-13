@@ -201,6 +201,8 @@ export default function UsersPage() {
     const term = searchUser.toLowerCase();
     return (
       u.name?.toLowerCase().includes(term) ||
+      u.first_name?.toLowerCase().includes(term) ||
+      u.last_name?.toLowerCase().includes(term) ||
       u.employee_id?.toLowerCase().includes(term) ||
       u.department?.toLowerCase().includes(term)
     );
@@ -236,7 +238,8 @@ export default function UsersPage() {
             <tr>
               <th>รหัสพนักงาน</th>
               <th>คำนำหน้า</th>
-              <th>ชื่อ-นามสกุล</th>
+              <th>ชื่อ</th>
+              <th>นามสกุล</th>
               <th>ฝ่าย</th>
               <th>วันเริ่มงาน</th>
               <th>วันสิ้นสุดสัญญา</th>
@@ -249,25 +252,24 @@ export default function UsersPage() {
             {filteredUsers?.map((u) => {
               // ดึงคำนำหน้า และชื่อ-นามสกุลแยกกันอย่างชัดเจน
               let title = u.title || '';
-              let displayName = '';
-              if (u.first_name) {
-                displayName = `${u.first_name} ${u.last_name || ''}`.trim();
-              } else {
-                displayName = u.name;
-                if (title && displayName.startsWith(title)) {
-                  displayName = displayName.slice(title.length).trim();
+              let firstName = u.first_name || '';
+              let lastName = u.last_name || '';
+
+              if (!firstName) {
+                let rest = u.name || '';
+                if (title && rest.startsWith(title)) {
+                  rest = rest.slice(title.length).trim();
                 } else if (!title) {
-                  const matched = TITLE_PREFIXES.find((p) => displayName.startsWith(p));
+                  const matched = TITLE_PREFIXES.find((p) => rest.startsWith(p));
                   if (matched) {
                     title = matched;
-                    displayName = displayName.slice(matched.length).trim();
+                    rest = rest.slice(matched.length).trim();
                   }
                 }
+                const parts = rest.split(/\s+/);
+                firstName = parts[0] || '';
+                lastName = parts.slice(1).join(' ') || '';
               }
-
-              // ตรวจสอบว่าหมดสัญญาจ้างหรือยัง (end_date ก่อนวันนี้)
-              const isContractExpired =
-                u.end_date && new Date(u.end_date) < new Date(new Date().setHours(0, 0, 0, 0));
 
               return (
                 <tr key={u.id}>
@@ -279,7 +281,8 @@ export default function UsersPage() {
                       {title || '-'}
                     </span>
                   </td>
-                  <td>{displayName || u.name}</td>
+                  <td>{firstName || '-'}</td>
+                  <td>{lastName || '-'}</td>
                   <td>{u.department || '-'}</td>
                   <td>{formatThaiDate(u.start_date)}</td>
                   <td>
@@ -290,11 +293,7 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td>
-                    {isContractExpired ? (
-                      <span className="badge badge-offline">ระงับ (หมดสัญญา)</span>
-                    ) : (
-                      <StatusBadge status={u.status} />
-                    )}
+                    <StatusBadge status={u.status} />
                   </td>
                   <td>
                     {u.has_embedding ? (

@@ -229,6 +229,15 @@ func (r *deviceRepo) UpdateIPAddress(ctx context.Context, id string, ip string) 
 	return err
 }
 
+func (r *deviceRepo) UpdateStatusAndIP(ctx context.Context, id string, status string, ip string, lastSeen time.Time) error {
+	if ip != "" {
+		_, err := r.db.ExecContext(ctx, "UPDATE devices SET status = $1, ip_address = $2, last_seen = $3 WHERE id = $4", status, ip, lastSeen, id)
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, "UPDATE devices SET status = $1, last_seen = $2 WHERE id = $3", status, lastSeen, id)
+	return err
+}
+
 func (r *deviceRepo) UpdateState(ctx context.Context, state *entity.DeviceState) error {
 	query := `
 	INSERT INTO device_state (device_id, applied_version, model_version, sw_version, cpu_temp, fps, outbox_pending, updated_at)

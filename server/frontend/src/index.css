@@ -1,3 +1,28 @@
+/* Kanit Font for Online & Offline Support */
+@font-face {
+  font-family: 'Kanit';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Kanit'), local('Kanit-Regular'), url('/fonts/Kanit-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Kanit';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('Kanit Medium'), local('Kanit-Medium'), url('/fonts/Kanit-Medium.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Kanit';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Kanit Bold'), local('Kanit-Bold'), url('/fonts/Kanit-Bold.ttf') format('truetype');
+}
+
 :root {
   --bg-color: #f5f6fa;
   --card-bg: #ffffff;
@@ -19,8 +44,11 @@
   padding: 0;
 }
 
+body, button, input, select, textarea {
+  font-family: 'Kanit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-primary);
   min-height: 100vh;
@@ -236,15 +264,30 @@ body {
 .btn-primary {
   background-color: var(--primary);
   color: white;
+  border: none;
+  border-radius: 6px;
 }
 
 .btn-primary:hover {
   background-color: #0773c5;
 }
 
+.btn-secondary {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+.btn-secondary:hover {
+  background-color: #e5e7eb;
+}
+
 .btn-danger {
   background-color: var(--danger);
   color: white;
+  border: none;
+  border-radius: 6px;
 }
 
 .btn-danger:hover {
