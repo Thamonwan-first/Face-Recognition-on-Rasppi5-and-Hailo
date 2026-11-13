@@ -392,8 +392,8 @@ class MainWindow(QMainWindow):
 
 
 def create_app(config, camera, detector, database):
-    init_fonts()
     app = QApplication(sys.argv)
+    init_fonts()
     app.setApplicationName("FaceAttendance")
     app.setFont(QFont(FONT_FAMILY, 11))
     window = MainWindow(config, camera, detector, database)
