@@ -4,6 +4,7 @@ Communicates with Hailo-8 chip over PCIe Gen3.
 Includes automated CPU Fallback when running without Hailo hardware.
 """
 import logging
+import threading
 import cv2
 import numpy as np
 from pathlib import Path
@@ -88,6 +89,7 @@ class HailoDetector:
         self._emb_network_group = None
         self._backend = "none"
         self._cv_face_cascade = None
+        self._hailo_lock = threading.Lock()
 
     def start(self):
         """Open Hailo VDevice or initialize CPU Fallback."""
@@ -168,9 +170,10 @@ class HailoDetector:
             in_params = InputVStreamParams.make_from_network_group(self._det_network_group, quantized=False, format_type=FormatType.UINT8)
             out_params = OutputVStreamParams.make_from_network_group(self._det_network_group, quantized=False, format_type=FormatType.FLOAT32)
 
-            with self._det_network_group.activate(self._det_network_group.create_params()):
-                with InferVStreams(self._det_network_group, in_params, out_params) as pipeline:
-                    raw_outputs = pipeline.infer({self._det_input_info.name: input_data})
+            with self._hailo_lock:
+                with self._det_network_group.activate(self._det_network_group.create_params()):
+                    with InferVStreams(self._det_network_group, in_params, out_params) as pipeline:
+                        raw_outputs = pipeline.infer({self._det_input_info.name: input_data})
 
             # Decode SCRFD anchors
             scale_x, scale_y = w / 640.0, h / 640.0
@@ -287,12 +290,13 @@ class HailoDetector:
             inp = np.expand_dims(cv2.resize(aligned_crop, (112, 112)).astype(np.float32), axis=0)
             in_p = InputVStreamParams.make_from_network_group(self._emb_network_group, quantized=False, format_type=FormatType.FLOAT32)
             out_p = OutputVStreamParams.make_from_network_group(self._emb_network_group, quantized=False, format_type=FormatType.FLOAT32)
-            with self._emb_network_group.activate(self._emb_network_group.create_params()):
-                with InferVStreams(self._emb_network_group, in_p, out_p) as pipeline:
-                    out = pipeline.infer({self._emb_input_info.name: inp})
-                    raw = list(out.values())[0].flatten()
-                    norm = np.linalg.norm(raw)
-                    return (raw / norm) if norm > 0 else raw
+            with self._hailo_lock:
+                with self._emb_network_group.activate(self._emb_network_group.create_params()):
+                    with InferVStreams(self._emb_network_group, in_p, out_p) as pipeline:
+                        out = pipeline.infer({self._emb_input_info.name: inp})
+                        raw = list(out.values())[0].flatten()
+                        norm = np.linalg.norm(raw)
+                        return (raw / norm) if norm > 0 else raw
 
         # Real ArcFace ONNX inference on CPU
         if getattr(self, "_cpu_arcface_net", None) is not None:
