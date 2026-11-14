@@ -42,28 +42,41 @@ class AntiSpoofDetector:
 
     def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         """
-        Crop face region with scale expansion (2.7x) so model sees border/screen context.
+        Crop face region with scale expansion (2.7x) maintaining square aspect ratio
+        and zero padding, matching official Silent-Face-Anti-Spoofing MiniFASNet.
         """
         src_h, src_w = image.shape[:2]
         x1, y1, x2, y2 = bbox_xyxy
-        box_w = max(1, x2 - x1)
-        box_h = max(1, y2 - y1)
+        w = max(1, x2 - x1)
+        h = max(1, y2 - y1)
 
-        scale = min((src_h - 1) / box_h, (src_w - 1) / box_w, self.scale)
-        new_w = box_w * scale
-        new_h = box_h * scale
+        new_w = int(w * self.scale)
+        new_h = int(h * self.scale)
+        cx = int(x1 + w / 2)
+        cy = int(y1 + h / 2)
 
-        center_x = x1 + box_w / 2
-        center_y = y1 + box_h / 2
+        crop_x1 = cx - new_w // 2
+        crop_y1 = cy - new_h // 2
+        crop_x2 = crop_x1 + new_w
+        crop_y2 = crop_y1 + new_h
 
-        cx1 = max(0, int(center_x - new_w / 2))
-        cy1 = max(0, int(center_y - new_h / 2))
-        cx2 = min(src_w - 1, int(center_x + new_w / 2))
-        cy2 = min(src_h - 1, int(center_y + new_h / 2))
+        left_pad = max(0, -crop_x1)
+        top_pad = max(0, -crop_y1)
+        right_pad = max(0, crop_x2 - src_w)
+        bottom_pad = max(0, crop_y2 - src_h)
 
-        cropped = image[cy1 : cy2 + 1, cx1 : cx2 + 1]
+        in_x1 = max(0, crop_x1)
+        in_y1 = max(0, crop_y1)
+        in_x2 = min(src_w, crop_x2)
+        in_y2 = min(src_h, crop_y2)
+
+        cropped = image[in_y1:in_y2, in_x1:in_x2]
         if cropped.size == 0:
             return np.zeros((80, 80, 3), dtype=np.uint8)
+
+        if left_pad > 0 or top_pad > 0 or right_pad > 0 or bottom_pad > 0:
+            cropped = cv2.copyMakeBorder(cropped, top_pad, bottom_pad, left_pad, right_pad, cv2.BORDER_CONSTANT, value=0)
+
         return cv2.resize(cropped, (80, 80))
 
     def check_liveness(self, frame_bgr_or_rgb: np.ndarray, bbox_xyxy: list) -> tuple[bool, float]:
@@ -76,7 +89,9 @@ class AntiSpoofDetector:
             return True, 1.0
 
         try:
-            face_crop = self._crop_face(frame_bgr_or_rgb, bbox_xyxy)
+            # Convert RGB camera frame to BGR for MiniFASNet
+            img_bgr = cv2.cvtColor(frame_bgr_or_rgb, cv2.COLOR_RGB2BGR)
+            face_crop = self._crop_face(img_bgr, bbox_xyxy)
             blob = cv2.dnn.blobFromImage(face_crop, scalefactor=1.0, size=(80, 80), swapRB=False)
             self.net.setInput(blob)
             logits = self.net.forward()

@@ -351,7 +351,7 @@ export default function UsersPage() {
                         แก้ไข
                       </button>
                       <button
-                        onClick={() => handleDelete(u.id, displayName || u.name)}
+                        onClick={() => handleDelete(u.id, u.name || `${title} ${firstName} ${lastName}`.trim())}
                         className="btn btn-danger"
                         style={{
                           padding: '0.3rem 0.65rem',
