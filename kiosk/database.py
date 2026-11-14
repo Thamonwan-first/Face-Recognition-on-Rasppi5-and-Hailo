@@ -40,9 +40,28 @@ def init_db(db_path: str | Path) -> sqlite3.Connection:
     else:
         logger.warning("schema.sql not found at %s", SCHEMA_FILE)
 
-    # Migration: ensure photo_path column exists
+    # Migrations: ensure columns exist
     try:
         conn.execute("ALTER TABLE users ADD COLUMN photo_path TEXT;")
+    except Exception:
+        pass
+
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN start_date TEXT;")
+    except Exception:
+        pass
+
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN end_date TEXT;")
+    except Exception:
+        pass
+
+    try:
+        conn.execute("ALTER TABLE attendance_events ADD COLUMN notes TEXT;")
+    except Exception:
+        pass
+
+    try:
         conn.commit()
     except Exception:
         pass
@@ -57,12 +76,13 @@ class Database:
         self.conn = conn
 
     def load_active_gallery(self) -> list[dict]:
-        """Load all active users and 512-d embeddings into RAM."""
+        """Load all users with embeddings (active and expired/suspended) into RAM."""
         sql = """
-            SELECT u.id AS user_id, u.name, u.employee_id, u.department, u.photo_path, e.embedding
+            SELECT u.id AS user_id, u.name, u.employee_id, u.department, u.photo_path,
+                   u.status, u.start_date, u.end_date, e.embedding
             FROM users u
             JOIN user_embeddings e ON u.id = e.user_id
-            WHERE u.status = 'active' AND u.deleted_at IS NULL
+            WHERE u.deleted_at IS NULL
         """
         cursor = self.conn.cursor()
         cursor.execute(sql)
@@ -81,6 +101,9 @@ class Database:
                     "employee_id": r["employee_id"] or "",
                     "department": r["department"] or "",
                     "photo_path": r["photo_path"] or "",
+                    "status": r["status"] or "active",
+                    "start_date": r["start_date"],
+                    "end_date": r["end_date"],
                     "embedding": emb,
                 })
         logger.info("Loaded %d face embeddings into RAM gallery", len(gallery))
@@ -142,6 +165,7 @@ class Database:
         debounce_seconds: int = 30,
         clock_synced: bool = False,
         snapshot_b64: str = "",
+        notes: str = "",
     ) -> dict | None:
         """Atomically record event in attendance_events and outbox using First-In, Last-Out."""
         if self.is_debounced(user_id, debounce_seconds):
@@ -159,6 +183,7 @@ class Database:
             "confidence": round(float(confidence), 4),
             "clock_synced": bool(clock_synced),
             "snapshot_b64": snapshot_b64,
+            "notes": notes,
             "created_at": now_iso,
         }
 
@@ -167,10 +192,10 @@ class Database:
             cursor.execute(
                 """
                 INSERT INTO attendance_events
-                (event_id, user_id, device_id, direction, confidence, clock_synced, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (event_id, user_id, device_id, direction, confidence, clock_synced, created_at, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (event_id, user_id, device_id, actual_direction, confidence, 1 if clock_synced else 0, now_iso),
+                (event_id, user_id, device_id, actual_direction, confidence, 1 if clock_synced else 0, now_iso, notes or None),
             )
             cursor.execute(
                 """

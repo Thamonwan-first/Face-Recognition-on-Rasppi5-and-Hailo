@@ -20,11 +20,11 @@ func NewAttendanceRepository(db *sql.DB) ports.AttendanceRepository {
 
 func (r *attendanceRepo) SaveEvent(ctx context.Context, ev *entity.AttendanceEvent) error {
 	query := `
-	INSERT INTO attendance_events (event_id, user_id, device_id, direction, confidence, clock_synced, snapshot_url, created_at, synced_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	INSERT INTO attendance_events (event_id, user_id, device_id, direction, confidence, clock_synced, snapshot_url, notes, created_at, synced_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		ev.EventID, ev.UserID, ev.DeviceID, ev.Direction, ev.Confidence, ev.ClockSynced, ev.SnapshotURL, ev.CreatedAt, ev.SyncedAt)
+		ev.EventID, ev.UserID, ev.DeviceID, ev.Direction, ev.Confidence, ev.ClockSynced, ev.SnapshotURL, ev.Notes, ev.CreatedAt, ev.SyncedAt)
 	return err
 }
 

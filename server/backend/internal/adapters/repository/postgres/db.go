@@ -144,8 +144,9 @@ func createSchema(db *sql.DB) error {
 		synced_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);
 
-	-- Migration: ensure snapshot_url exists on attendance_events
+	-- Migration: ensure snapshot_url and notes exist on attendance_events
 	ALTER TABLE attendance_events ADD COLUMN IF NOT EXISTS snapshot_url VARCHAR(255);
+	ALTER TABLE attendance_events ADD COLUMN IF NOT EXISTS notes TEXT;
 
 	CREATE TABLE IF NOT EXISTS attendance_pairs (
 		id SERIAL PRIMARY KEY,

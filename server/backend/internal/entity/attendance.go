@@ -11,6 +11,7 @@ type AttendanceEvent struct {
 	ClockSynced bool      `json:"clock_synced"`
 	SnapshotURL string    `json:"snapshot_url,omitempty"`
 	SnapshotB64 string    `json:"snapshot_b64,omitempty"`
+	Notes       string    `json:"notes,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	SyncedAt    time.Time `json:"synced_at"`
 }

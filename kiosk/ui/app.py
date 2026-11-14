@@ -96,10 +96,11 @@ def make_monogram_pixmap(name: str, size: int = 60) -> QPixmap:
 
 class AttendanceSuccessPopup(QDialog):
     """
-    ป๊อปอัปแจ้งผลการลงเวลาสำเร็จ สไตล์มินิมอล โทนขาวครีม (Warm Minimalist Cream)
+    ป๊อปอัปแจ้งผลการลงเวลา สไตล์มินิมอล โทนขาวครีม (Warm Minimalist Cream)
     เงาฟุ้งนุ่มนวล ขอบมนเรียบหรู พร้อมรูปโปรไฟล์พนักงาน ปิดเองอัตโนมัติใน 2.5 วินาที
+    รองรับสถานะสำเร็จ หรือแจ้งเตือนหมดอายุสัญญาจ้าง
     """
-    def __init__(self, parent, name, direction_text, time_str, emp_id="", division="", photo_path=""):
+    def __init__(self, parent, name, direction_text, time_str, emp_id="", division="", photo_path="", is_expired=False):
         super().__init__(parent)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -109,11 +110,12 @@ class AttendanceSuccessPopup(QDialog):
         outer.setContentsMargins(12, 12, 12, 12)
 
         card = QFrame(self)
+        border_color = "#FCA5A5" if is_expired else CARD_BORDER
         card.setStyleSheet(
             f"""
             QFrame {{
                 background-color: {CARD_BG};
-                border: 1.5px solid {CARD_BORDER};
+                border: 1.5px solid {border_color};
                 border-radius: 20px;
             }}
             """
@@ -131,10 +133,12 @@ class AttendanceSuccessPopup(QDialog):
         layout.setSpacing(4)
 
         # 1. หัวข้อสถานะ
-        title = QLabel("บันทึกเวลาสำเร็จ")
+        title_text = "หมดอายุสัญญาจ้าง" if is_expired else "บันทึกเวลาสำเร็จ"
+        title_color = "#DC2626" if is_expired else ACCENT_SUCCESS
+        title = QLabel(title_text)
         title.setFont(QFont(FONT_FAMILY, 13, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(f"color: {ACCENT_SUCCESS}; border: none; background: transparent;")
+        title.setStyleSheet(f"color: {title_color}; border: none; background: transparent;")
         layout.addWidget(title)
 
         # 2. รูปโปรไฟล์พนักงาน (วงกลม)
@@ -171,11 +175,15 @@ class AttendanceSuccessPopup(QDialog):
             sub_lbl.setWordWrap(True)
             layout.addWidget(sub_lbl)
 
-        # 5. ทิศทางและเวลา
-        time_lbl = QLabel(f"บันทึก: {direction_text} • เวลา {time_str} น.")
+        # 5. ทิศทางและเวลา หรือข้อความเตือน
+        if is_expired:
+            time_lbl = QLabel(f"ไม่บันทึกเวลาเข้า-ออก • เวลา {time_str} น.")
+            time_lbl.setStyleSheet(f"color: #DC2626; border: none; background: transparent; font-weight: bold;")
+        else:
+            time_lbl = QLabel(f"บันทึก: {direction_text} • เวลา {time_str} น.")
+            time_lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; border: none; background: transparent;")
         time_lbl.setFont(QFont(FONT_FAMILY, 11))
         time_lbl.setAlignment(Qt.AlignCenter)
-        time_lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; border: none; background: transparent;")
         layout.addWidget(time_lbl)
 
         outer.addWidget(card)
@@ -356,8 +364,8 @@ class MainWindow(QMainWindow):
         )
         self.cam_label.setPixmap(pix)
 
-    @pyqtSlot(str, float, str, str, str, str)
-    def _on_recognized(self, name, conf, direction, emp_id, division, photo_path):
+    @pyqtSlot(str, float, str, str, str, str, bool)
+    def _on_recognized(self, name, conf, direction, emp_id, division, photo_path, is_expired):
         """เมื่อสแกนเจอพนักงาน: แสดง Floating Glass Card ตรงกลางจอ พร้อมรูปโปรไฟล์"""
         dir_text = "เข้างาน" if direction == "IN" else "ออกงาน"
         now_time = datetime.now().strftime("%H:%M:%S")
@@ -371,7 +379,7 @@ class MainWindow(QMainWindow):
 
         # แสดง Floating Glass Card ตรงกลางจอ
         self._active_popup = AttendanceSuccessPopup(
-            self, name, dir_text, now_time, emp_id=emp_id, division=division, photo_path=photo_path
+            self, name, dir_text, now_time, emp_id=emp_id, division=division, photo_path=photo_path, is_expired=is_expired
         )
         self._active_popup.show()
 

@@ -67,7 +67,7 @@ def crop_face_snapshot_b64(frame_rgb, bbox) -> str:
 class RecognitionWorker(QThread):
     """Camera capture and face recognition worker thread."""
     frame_ready = pyqtSignal(QImage)
-    face_recognized = pyqtSignal(str, float, str, str, str, str)
+    face_recognized = pyqtSignal(str, float, str, str, str, str, bool)
     unknown_detected = pyqtSignal()
     spoof_detected = pyqtSignal()
 
@@ -134,12 +134,13 @@ class RecognitionWorker(QThread):
                     landmarks = f.get("landmarks", [])
 
                     # 1. Passive Anti-Spoofing Check (MiniFASNetV2)
+                    is_spoof_attempt = False
                     if self.anti_spoof and self.anti_spoof.enabled:
                         is_real, spoof_score = self.anti_spoof.check_liveness(frame_rgb, [x1, y1, x2, y2])
                         if not is_real:
-                            # ป้องกันภาพถ่าย/หน้าจอมือถือแบบเงียบๆ ไม่แสดงข้อความกวนสายตา และไม่บันทึกเวลา
-                            draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 255, 255), thickness=2)
-                            continue
+                            is_spoof_attempt = True
+                            self.spoof_detected.emit()
+                            logger.info("🛡️ ตรวจพบ Anti-Spoof (คะแนนคนจริงต่ำ: %.2f)", spoof_score)
 
                     # 2. 5-point alignment & ArcFace embedding
                     if len(landmarks) >= 5:
@@ -164,30 +165,55 @@ class RecognitionWorker(QThread):
                         emp_id = user_info.get("employee_id", "")
                         dept = user_info.get("department", "")
                         photo_path = user_info.get("photo_path", "")
+                        user_status = user_info.get("status", "active")
+                        end_date_str = user_info.get("end_date")
 
-                        cv2.putText(annotated, name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+                        # ตรวจสอบการหมดอายุสัญญาจ้าง
+                        is_contract_expired = False
+                        if user_status != "active":
+                            is_contract_expired = True
+                        elif end_date_str:
+                            try:
+                                from datetime import date
+                                end_d = date.fromisoformat(end_date_str[:10])
+                                if date.today() > end_d:
+                                    is_contract_expired = True
+                            except Exception:
+                                pass
+
+                        display_name = f"{name} (หมดสัญญา)" if is_contract_expired else name
+                        cv2.putText(annotated, display_name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255) if is_contract_expired else (255, 255, 255), 2)
 
                         # Fast in-memory debounce check before querying SQLite in 30fps loop
                         now = time.time()
                         last_scan = self._recent_scans.get(user_id, 0)
                         if (now - last_scan >= self.config.debounce_seconds) and not self.db.is_debounced(user_id, self.config.debounce_seconds):
                             snapshot_b64 = crop_face_snapshot_b64(frame_rgb, (x1, y1, x2, y2))
-                            rec = self.db.record_attendance(
-                                user_id,
-                                conf,
-                                self.current_direction,
-                                self.config.device_id,
-                                self.config.debounce_seconds,
-                                clock_synced=self._is_clock_synced(),
-                                snapshot_b64=snapshot_b64,
-                            )
-                            if rec:
+
+                            if is_contract_expired:
+                                # พนักงานหมดอายุสัญญาจ้าง: แสดงชื่อ/รูปโปรไฟล์บนจอ แต่ไม่บันทึกเวลาเข้า-ออกงาน
                                 self._recent_scans[user_id] = now
-                                # Bound memory: purge stale entries older than 2x debounce window
-                                if len(self._recent_scans) > 50:
-                                    cutoff = now - (2 * self.config.debounce_seconds)
-                                    self._recent_scans = {uid: t for uid, t in self._recent_scans.items() if t > cutoff}
-                                self.face_recognized.emit(name, conf, rec["direction"], emp_id, dept, photo_path)
+                                self.face_recognized.emit(name, conf, "EXPIRED", emp_id, dept, photo_path, True)
+                                logger.warning("⚠️ พนักงาน %s (%s) หมดอายุสัญญาจ้าง — แสดงผลบนหน้าจอแต่ไม่บันทึกเวลา", name, emp_id)
+                            else:
+                                note_msg = "ตรวจพบ Anti-Spoof" if is_spoof_attempt else ""
+                                rec = self.db.record_attendance(
+                                    user_id,
+                                    conf,
+                                    self.current_direction,
+                                    self.config.device_id,
+                                    self.config.debounce_seconds,
+                                    clock_synced=self._is_clock_synced(),
+                                    snapshot_b64=snapshot_b64,
+                                    notes=note_msg,
+                                )
+                                if rec:
+                                    self._recent_scans[user_id] = now
+                                    # Bound memory: purge stale entries older than 2x debounce window
+                                    if len(self._recent_scans) > 50:
+                                        cutoff = now - (2 * self.config.debounce_seconds)
+                                        self._recent_scans = {uid: t for uid, t in self._recent_scans.items() if t > cutoff}
+                                    self.face_recognized.emit(name, conf, rec["direction"], emp_id, dept, photo_path, False)
                     else:
                         now = time.time()
                         if not hasattr(self, '_unknown_face_start') or self._unknown_face_start is None:

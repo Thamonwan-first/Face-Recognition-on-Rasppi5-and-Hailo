@@ -68,6 +68,8 @@ type UserSyncItem struct {
 	Name         string  `json:"name"`
 	Department   string  `json:"department"`
 	Status       string  `json:"status"`
+	StartDate    *string `json:"start_date,omitempty"`
+	EndDate      *string `json:"end_date,omitempty"`
 	Version      int     `json:"version"`
 	PhotoURL     *string `json:"photo_url,omitempty"`
 	EmbeddingB64 *string `json:"embedding_b64"`
@@ -97,14 +99,16 @@ func (uc *SyncUseCase) GetUsersSince(ctx context.Context, sinceVersion int) (*Us
 			Name:       u.Name,
 			Department: u.Department,
 			Status:     u.Status,
+			StartDate:  u.StartDate,
+			EndDate:    u.EndDate,
 			Version:    u.Version,
 		}
 		if u.PhotoURL != "" {
 			item.PhotoURL = &u.PhotoURL
 		}
 
-		// Only include embedding vector if the user is currently active
-		if u.Status == "active" && len(u.RawEmbedding) > 0 {
+		// Include embedding vector if available so kiosk can detect user even if expired/suspended
+		if len(u.RawEmbedding) > 0 {
 			b64 := base64.StdEncoding.EncodeToString(u.RawEmbedding)
 			item.EmbeddingB64 = &b64
 		}

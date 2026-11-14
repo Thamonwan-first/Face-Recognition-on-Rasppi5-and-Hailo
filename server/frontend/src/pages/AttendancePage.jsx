@@ -20,6 +20,7 @@ export default function AttendancePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDevice, setSelectedDevice] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'RECOGNIZED' | 'UNRECOGNIZED' | 'ABSENT'
+  const [previewImage, setPreviewImage] = useState(null); // URL ภาพสำหรับ Modal ขยายรูป
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -601,11 +602,13 @@ export default function AttendancePage() {
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', textAlign: 'left' }}>
               <th style={{ padding: '0.85rem 1rem', width: '80px' }}>รูปสแกน</th>
-              <th style={{ padding: '0.85rem 1rem', width: '140px' }}>เวลา</th>
-              <th style={{ padding: '0.85rem 1rem', width: '130px' }}>รหัสพนักงาน</th>
-              <th style={{ padding: '0.85rem 1rem' }}>ชื่อ-นามสกุล</th>
-              <th style={{ padding: '0.85rem 1rem', width: '150px' }}>สถานะ</th>
-              <th style={{ padding: '0.85rem 1rem', width: '130px', textAlign: 'center' }}>จัดการ</th>
+              <th style={{ padding: '0.85rem 1rem', width: '120px' }}>รหัสพนักงาน</th>
+              <th style={{ padding: '0.85rem 1rem', width: '180px' }}>ชื่อ-นามสกุล</th>
+              <th style={{ padding: '0.85rem 1rem', width: '100px' }}>เวลาเข้า</th>
+              <th style={{ padding: '0.85rem 1rem', width: '100px' }}>เวลาออก</th>
+              <th style={{ padding: '0.85rem 1rem', width: '130px' }}>สถานะ</th>
+              <th style={{ padding: '0.85rem 1rem', width: '150px' }}>หมายเหตุ</th>
+              <th style={{ padding: '0.85rem 1rem', width: '110px', textAlign: 'center' }}>จัดการ</th>
             </tr>
           </thead>
           <tbody>
@@ -624,6 +627,8 @@ export default function AttendancePage() {
                       <img
                         src={ur.snapshot_url}
                         alt="ภาพไม่พบใบหน้า"
+                        onClick={() => setPreviewImage(ur.snapshot_url)}
+                        title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
                         style={{
                           width: '56px',
                           height: '56px',
@@ -632,6 +637,7 @@ export default function AttendancePage() {
                           border: '1.5px solid #f59e0b',
                           background: '#fef3c7',
                           display: 'block',
+                          cursor: 'pointer',
                         }}
                       />
                     ) : (
@@ -654,14 +660,6 @@ export default function AttendancePage() {
                     )}
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
-                    <div style={{ fontWeight: 600, color: '#b45309' }}>
-                      {formatThaiTime(ur.created_at)} น.
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#78716c' }}>
-                      {formatThaiDate(ur.created_at)}
-                    </div>
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem' }}>
                     <span style={{ color: '#9ca3af' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
@@ -671,6 +669,14 @@ export default function AttendancePage() {
                     <div style={{ fontSize: '0.75rem', color: '#78716c' }}>
                       ใบหน้ายังไม่เคยลงทะเบียน
                     </div>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <div style={{ fontWeight: 600, color: '#b45309' }}>
+                      {formatThaiTime(ur.created_at)} น.
+                    </div>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <span
@@ -686,6 +692,11 @@ export default function AttendancePage() {
                       }}
                     >
                       ไม่พบใบหน้า
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#d97706', fontWeight: 600 }}>
+                      บุคคลภายนอก/ยังไม่ลงทะเบียน
                     </span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
@@ -746,6 +757,8 @@ export default function AttendancePage() {
                         <img
                           src={snapshotUrl}
                           alt="สแกน"
+                          onClick={() => setPreviewImage(snapshotUrl)}
+                          title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
                           style={{
                             width: '56px',
                             height: '56px',
@@ -754,6 +767,7 @@ export default function AttendancePage() {
                             border: '1px solid #e2e8f0',
                             background: '#f8fafc',
                             display: 'block',
+                            cursor: 'pointer',
                           }}
                         />
                       ) : (
@@ -776,32 +790,55 @@ export default function AttendancePage() {
                       )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
-                      {p.check_in_time && (
-                        <div>
-                          <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>เข้า:</span>{' '}
-                          <span style={{ fontWeight: 600 }}>{formatThaiTime(p.check_in_time)} น.</span>
-                        </div>
-                      )}
-                      {p.check_out_time && (
-                        <div>
-                          <span style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: 600 }}>ออก:</span>{' '}
-                          <span style={{ fontWeight: 600 }}>{formatThaiTime(p.check_out_time)} น.</span>
-                        </div>
-                      )}
-                      {!p.check_in_time && !p.check_out_time && (
-                        <span style={{ color: '#94a3b8' }}>-</span>
-                      )}
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
                       <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.92rem', color: '#1e293b' }}>
                         {p.employee_id || '-'}
                       </span>
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
                       <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
+                      {p.department && (
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.department}</div>
+                      )}
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
+                      {p.check_in_time ? (
+                        <span style={{ fontWeight: 600, color: '#16a34a' }}>
+                          {formatThaiTime(p.check_in_time)} น.
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>-</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
+                      {p.check_out_time ? (
+                        <span style={{ fontWeight: 600, color: '#2563eb' }}>
+                          {formatThaiTime(p.check_out_time)} น.
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>-</span>
+                      )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
                       {renderStatusBadge(p)}
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
+                      {p.adjustment_reason ? (
+                        <span
+                          style={{
+                            fontSize: '0.8rem',
+                            color: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? '#dc2626' : '#475569',
+                            fontWeight: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? 600 : 400,
+                            background: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? '#fef2f2' : 'transparent',
+                            padding: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? '2px 8px' : 0,
+                            borderRadius: '4px',
+                            display: 'inline-block',
+                          }}
+                        >
+                          {p.adjustment_reason}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>-</span>
+                      )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                       <button
@@ -856,15 +893,21 @@ export default function AttendancePage() {
                     </div>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
-                    <span style={{ color: '#94a3b8' }}>-</span>
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem' }}>
                     <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.92rem', color: '#1e293b' }}>
                       {p.employee_id || '-'}
                     </span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
+                    {p.department && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.department}</div>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ color: '#94a3b8' }}>-</span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <span
@@ -881,6 +924,9 @@ export default function AttendancePage() {
                     >
                       ยังไม่สแกน
                     </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                     <button
@@ -1615,6 +1661,80 @@ export default function AttendancePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ดูภาพถ่ายสแกนขนาดใหญ่ (Zoom Image Modal) */}
+      {previewImage && (
+        <div
+          onClick={() => setPreviewImage(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            cursor: 'zoom-out',
+            padding: '1.5rem',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '0.75rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+            }}
+          >
+            <button
+              onClick={() => setPreviewImage(null)}
+              style={{
+                position: 'absolute',
+                top: '-12px',
+                right: '-12px',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: '#ef4444',
+                color: '#fff',
+                border: '2px solid #fff',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              }}
+              title="ปิด"
+            >
+              ✕
+            </button>
+            <img
+              src={previewImage}
+              alt="ภาพสแกนขนาดใหญ่"
+              style={{
+                maxWidth: '80vw',
+                maxHeight: '80vh',
+                borderRadius: '8px',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
+              ภาพถ่ายหลักฐานขณะสแกนหน้าเครื่อง Kiosk (คลิกพื้นหลังเพื่อปิด)
+            </div>
           </div>
         </div>
       )}

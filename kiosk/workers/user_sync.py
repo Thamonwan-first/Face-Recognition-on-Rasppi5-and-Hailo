@@ -131,51 +131,39 @@ class UserSyncWorker:
                 user_id = u["id"]
                 deleted_at = u.get("deleted_at")
                 status = u.get("status", "active")
+                start_date = u.get("start_date")
+                end_date = u.get("end_date")
                 photo_path = user_photo_paths.get(user_id, "")
 
-                if deleted_at or status != "active":
+                cur.execute(
+                    """
+                    INSERT INTO users (id, employee_id, name, department, status, start_date, end_date, version, photo_path, deleted_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                      employee_id=excluded.employee_id,
+                      name=excluded.name,
+                      department=excluded.department,
+                      status=excluded.status,
+                      start_date=excluded.start_date,
+                      end_date=excluded.end_date,
+                      version=excluded.version,
+                      photo_path=COALESCE(excluded.photo_path, users.photo_path),
+                      deleted_at=excluded.deleted_at
+                    """,
+                    (user_id, u.get("employee_id"), u["name"], u.get("department"), status, start_date, end_date, u.get("version", 0), photo_path or None, deleted_at)
+                )
+
+                cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
+                emb_b64 = u.get("embedding_b64")
+                if emb_b64 and not deleted_at:
+                    emb_bytes = base64.b64decode(emb_b64)
                     cur.execute(
                         """
-                        INSERT INTO users (id, employee_id, name, department, status, version, photo_path, deleted_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(id) DO UPDATE SET
-                          employee_id=excluded.employee_id,
-                          name=excluded.name,
-                          department=excluded.department,
-                          status=excluded.status,
-                          version=excluded.version,
-                          photo_path=COALESCE(excluded.photo_path, users.photo_path),
-                          deleted_at=excluded.deleted_at
+                        INSERT INTO user_embeddings (id, user_id, embedding, model_version, source)
+                        VALUES (?, ?, ?, 'arcface_mobilefacenet_v1', 'server_sync')
                         """,
-                        (user_id, u.get("employee_id"), u["name"], u.get("department"), status, u.get("version", 0), photo_path or None, deleted_at or "suspended")
+                        (f"emb-{user_id}", user_id, emb_bytes)
                     )
-                    cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
-                else:
-                    cur.execute(
-                        """
-                        INSERT INTO users (id, employee_id, name, department, status, version, photo_path)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(id) DO UPDATE SET
-                          employee_id=excluded.employee_id,
-                          name=excluded.name,
-                          department=excluded.department,
-                          status=excluded.status,
-                          version=excluded.version,
-                          photo_path=COALESCE(excluded.photo_path, users.photo_path)
-                        """,
-                        (user_id, u.get("employee_id"), u["name"], u.get("department"), "active", u.get("version", 0), photo_path or None)
-                    )
-                    emb_b64 = u.get("embedding_b64")
-                    cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
-                    if emb_b64:
-                        emb_bytes = base64.b64decode(emb_b64)
-                        cur.execute(
-                            """
-                            INSERT INTO user_embeddings (id, user_id, embedding, model_version, source)
-                            VALUES (?, ?, ?, 'arcface_mobilefacenet_v1', 'server_sync')
-                            """,
-                            (f"emb-{user_id}", user_id, emb_bytes)
-                        )
 
             cur.execute("UPDATE sync_state SET value = ? WHERE key = 'last_user_version'", (str(latest_v),))
             conn.commit()

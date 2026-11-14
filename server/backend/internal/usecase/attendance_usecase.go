@@ -329,12 +329,23 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 			}
 			newPair.Status = "open"
 		}
+		if event.Notes != "" {
+			newPair.AdjustmentReason = event.Notes
+		}
 		return uc.attendanceRepo.SaveEventAndPair(ctx, event, newPair, false)
 	}
 
 	// Existing open pair
 	now := time.Now().UTC()
 	pair.UpdatedAt = now
+
+	if event.Notes != "" {
+		if pair.AdjustmentReason != "" && !strings.Contains(pair.AdjustmentReason, event.Notes) {
+			pair.AdjustmentReason = pair.AdjustmentReason + ", " + event.Notes
+		} else if pair.AdjustmentReason == "" {
+			pair.AdjustmentReason = event.Notes
+		}
+	}
 
 	if event.Direction == "OUT" || (event.Direction == "AUTO" && pair.CheckInEventID != nil) {
 		pair.CheckOutEventID = &event.EventID
