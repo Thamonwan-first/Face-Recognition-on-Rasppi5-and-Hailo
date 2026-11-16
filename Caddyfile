@@ -1,8 +1,34 @@
 # Caddyfile — internal HTTPS reverse proxy
 # Replace attendance.local with the org's internal hostname or IP.
 
-attendance.local {
-    # TLS with internal/self-signed CA
+# Caddyfile — HTTP & HTTPS reverse proxy for local network IP and domain
+
+# 1. Plain HTTP for direct local IP access from phones and browsers (No SSL warnings / No redirect loops)
+http://:80 {
+    # API proxy
+    handle /api/* {
+        reverse_proxy server:8443
+    }
+    handle /auth/* {
+        reverse_proxy server:8443
+    }
+    handle /sync/* {
+        reverse_proxy server:8443
+    }
+    handle /health {
+        reverse_proxy server:8443
+    }
+
+    # Dashboard SPA (Static files & HTML5 routing)
+    handle {
+        root * /srv/dashboard
+        try_files {path} /index.html
+        file_server
+    }
+}
+
+# 2. HTTPS with internal self-signed TLS (Optional)
+https://:443, https://attendance.local {
     tls internal
 
     # API proxy
@@ -19,15 +45,10 @@ attendance.local {
         reverse_proxy server:8443
     }
 
-    # Redirect legacy /dashboard path to root
-    handle /dashboard* {
-        redir * / 308
-    }
-
     # Dashboard SPA
-    handle /* {
+    handle {
         root * /srv/dashboard
-        file_server
         try_files {path} /index.html
+        file_server
     }
 }
