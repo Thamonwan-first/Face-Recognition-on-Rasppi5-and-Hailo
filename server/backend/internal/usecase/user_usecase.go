@@ -61,11 +61,13 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 		return nil, fmt.Errorf("%w: user name is required", entity.ErrInvalidInput)
 	}
 
-	if dto.Status == "" {
+	now := time.Now().UTC()
+	todayStr := now.Format("2006-01-02")
+	if dto.EndDate != nil && *dto.EndDate != "" && *dto.EndDate < todayStr {
+		dto.Status = "inactive"
+	} else {
 		dto.Status = "active"
 	}
-
-	now := time.Now().UTC()
 
 	user := &entity.User{
 		ID:         uuid.NewString(),
@@ -134,14 +136,19 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 	if dto.Department != "" {
 		user.Department = dto.Department
 	}
-	if dto.Status != "" {
-		user.Status = dto.Status
-	}
 	if dto.StartDate != nil {
 		user.StartDate = dto.StartDate
 	}
 	if dto.EndDate != nil {
 		user.EndDate = dto.EndDate
+	}
+
+	// Calculate status automatically based on end_date
+	todayStr := time.Now().UTC().Format("2006-01-02")
+	if user.EndDate != nil && *user.EndDate != "" && *user.EndDate < todayStr {
+		user.Status = "inactive"
+	} else {
+		user.Status = "active"
 	}
 
 	user.UpdatedAt = time.Now().UTC()

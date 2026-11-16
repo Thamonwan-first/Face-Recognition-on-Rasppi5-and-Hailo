@@ -134,6 +134,8 @@ export default function UsersPage() {
 
     const prefix = formData.title ? `${formData.title} ` : '';
     const fullName = `${prefix}${formData.first_name.trim()} ${formData.last_name.trim()}`.trim();
+    const today = new Date().toISOString().slice(0, 10);
+    const autoStatus = (formData.end_date && today > formData.end_date) ? 'inactive' : 'active';
     const payload = {
       employee_id: formData.employee_id.trim() || null,
       title: formData.title,
@@ -141,7 +143,7 @@ export default function UsersPage() {
       last_name: formData.last_name.trim(),
       name: fullName,
       department: formData.department,
-      status: formData.status,
+      status: autoStatus,
       start_date: formData.start_date || null,
       end_date: formData.end_date || null,
     };
@@ -538,19 +540,42 @@ export default function UsersPage() {
                 </div>
               </div>
 
-              {editUser && (
-                <div className="form-group">
-                  <label>สถานะการทำงาน</label>
-                  <select
-                    className="input-field"
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              {/* แสดงสถานะผู้ใช้งานอัตโนมัติตามวันสัญญา (ไม่ต้องกดเลือกเอง) */}
+              {(() => {
+                const today = new Date().toISOString().slice(0, 10);
+                const isExpired = formData.end_date && today > formData.end_date;
+                return (
+                  <div
+                    style={{
+                      marginTop: '0.75rem',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: '8px',
+                      background: isExpired ? '#fef2f2' : '#f0fdf4',
+                      border: `1px solid ${isExpired ? '#fecaca' : '#bbf7d0'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
                   >
-                    <option value="active">ปกติ</option>
-                    <option value="inactive">ระงับชั่วคราว</option>
-                  </select>
-                </div>
-              )}
+                    <span style={{ fontSize: '0.82rem', color: isExpired ? '#991b1b' : '#166534', fontWeight: 500 }}>
+                      สถานะผู้ใช้ (คำนวณอัตโนมัติ):
+                    </span>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        color: isExpired ? '#dc2626' : '#15803d',
+                        background: isExpired ? '#fee2e2' : '#dcfce7',
+                        padding: '0.2rem 0.65rem',
+                        borderRadius: '20px',
+                        border: `1px solid ${isExpired ? '#fca5a5' : '#86efac'}`,
+                      }}
+                    >
+                      {isExpired ? 'inactive (หมดสัญญา)' : 'active (ปกติ)'}
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* ส่วนลงทะเบียน / อัปเดตภาพถ่ายใบหน้า */}
               <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e2e8f0' }}>
