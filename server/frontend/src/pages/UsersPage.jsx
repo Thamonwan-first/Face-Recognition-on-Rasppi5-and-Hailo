@@ -53,8 +53,9 @@ export default function UsersPage() {
   const [imageFiles, setImageFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // State ค้นหาพนักงาน
+  // State ค้นหาพนักงาน และตัวกรองสถานะ
   const [searchUser, setSearchUser] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL'); // ALL | ACTIVE | INACTIVE | HAS_FACE | NO_FACE
 
   // 1. ดึงรายชื่อพนักงานทั้งหมด
   const { data: users, isLoading, error } = useQuery({
@@ -195,8 +196,20 @@ export default function UsersPage() {
     }
   };
 
-  // กรองรายชื่อพนักงานตามช่องค้นหา
+  // วันที่ปัจจุบันสำหรับตรวจสอบสัญญาจ้าง
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // กรองรายชื่อพนักงานตามช่องค้นหา และแท็บสถานะ
   const filteredUsers = users?.filter((u) => {
+    // 1. คำนวณสถานะ: หากหมดสัญญา (end_date < วันนี้) ให้ถือเป็น inactive ทันที
+    const isExpired = u.end_date && todayStr > u.end_date.slice(0, 10);
+    const effectiveStatus = (isExpired || u.status === 'inactive') ? 'inactive' : 'active';
+
+    if (filterStatus === 'ACTIVE' && effectiveStatus !== 'active') return false;
+    if (filterStatus === 'INACTIVE' && effectiveStatus !== 'inactive') return false;
+    if (filterStatus === 'HAS_FACE' && !u.has_embedding) return false;
+    if (filterStatus === 'NO_FACE' && u.has_embedding) return false;
+
     if (!searchUser) return true;
     const term = searchUser.toLowerCase();
     return (
@@ -215,6 +228,37 @@ export default function UsersPage() {
         <button onClick={openCreateModal} className="btn btn-primary">
           เพิ่มพนักงาน
         </button>
+      </div>
+
+      {/* แท็บกรองสถานะผู้ใช้และสถานะใบหน้า */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        {[
+          { key: 'ALL', label: `ทั้งหมด (${users?.length || 0})` },
+          { key: 'ACTIVE', label: `ปกติ / Active (${users?.filter(u => !(u.end_date && todayStr > u.end_date.slice(0, 10)) && u.status !== 'inactive').length || 0})` },
+          { key: 'INACTIVE', label: `หมดสัญญา / Inactive (${users?.filter(u => (u.end_date && todayStr > u.end_date.slice(0, 10)) || u.status === 'inactive').length || 0})` },
+          { key: 'HAS_FACE', label: `มีรูปใบหน้า (${users?.filter(u => u.has_embedding).length || 0})` },
+          { key: 'NO_FACE', label: `ยังไม่มีรูปใบหน้า (${users?.filter(u => !u.has_embedding).length || 0})` },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setFilterStatus(tab.key)}
+            className="btn"
+            style={{
+              padding: '0.4rem 0.85rem',
+              fontSize: '0.82rem',
+              borderRadius: '20px',
+              border: filterStatus === tab.key ? '2px solid var(--primary)' : '1px solid #cbd5e1',
+              background: filterStatus === tab.key ? 'var(--primary)' : '#ffffff',
+              color: filterStatus === tab.key ? '#ffffff' : '#475569',
+              fontWeight: filterStatus === tab.key ? 600 : 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* ช่องค้นหาพนักงาน */}
@@ -293,7 +337,11 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td>
-                    <StatusBadge status={u.status} />
+                    {(() => {
+                      const isExpired = u.end_date && todayStr > u.end_date.slice(0, 10);
+                      const effectiveStatus = (isExpired || u.status === 'inactive') ? 'inactive' : 'active';
+                      return <StatusBadge status={effectiveStatus} />;
+                    })()}
                   </td>
                   <td>
                     {u.has_embedding ? (
@@ -312,7 +360,7 @@ export default function UsersPage() {
                         }}
                       >
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }}></span>
-                        ลงทะเบียนแล้ว
+                        มีรูปใบหน้า
                       </span>
                     ) : (
                       <span
@@ -330,7 +378,7 @@ export default function UsersPage() {
                         }}
                       >
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#94a3b8' }}></span>
-                        ยังไม่ลงทะเบียน
+                        ยังไม่มีรูปใบหน้า
                       </span>
                     )}
                   </td>

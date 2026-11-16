@@ -181,7 +181,7 @@ class RecognitionWorker(QThread):
                             except Exception:
                                 pass
 
-                        display_name = f"{name} (หมดสัญญา)" if is_contract_expired else name
+                        display_name = f"{name} (Inactive)" if is_contract_expired else name
                         cv2.putText(annotated, display_name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255) if is_contract_expired else (255, 255, 255), 2)
 
                         # Fast in-memory debounce check before querying SQLite in 30fps loop

@@ -45,6 +45,9 @@ func (r *userRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*ent
 }
 
 func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.User, error) {
+	// Automatically mark any users whose contract ended as inactive
+	_, _ = r.db.ExecContext(ctx, "UPDATE users SET status = 'inactive', version = version + 1, updated_at = NOW() WHERE end_date IS NOT NULL AND end_date < CURRENT_DATE AND status != 'inactive'")
+
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
 	       u.status,
@@ -128,6 +131,9 @@ func (r *userRepo) GetLatestVersion(ctx context.Context) (int, error) {
 }
 
 func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*entity.User, error) {
+	// Automatically mark any users whose contract ended as inactive
+	_, _ = r.db.ExecContext(ctx, "UPDATE users SET status = 'inactive', version = version + 1, updated_at = NOW() WHERE end_date IS NOT NULL AND end_date < CURRENT_DATE AND status != 'inactive'")
+
 	query := `
 	SELECT u.id, u.employee_id, u.title, u.first_name, u.last_name, u.name, u.department,
 	       u.status,
@@ -171,6 +177,9 @@ func (r *userRepo) ListUpdatedSince(ctx context.Context, sinceVersion int) ([]*e
 		}
 		if endDate.Valid {
 			u.EndDate = &endDate.String
+			if endDate.String != "" && endDate.String < time.Now().Format("2006-01-02") {
+				u.Status = "inactive"
+			}
 		}
 		if deletedAt.Valid {
 			u.DeletedAt = &deletedAt.Time
@@ -254,6 +263,9 @@ func scanUser(scanner rowScanner) (*entity.User, error) {
 	}
 	if endDate.Valid {
 		u.EndDate = &endDate.String
+		if endDate.String != "" && endDate.String < time.Now().Format("2006-01-02") {
+			u.Status = "inactive"
+		}
 	}
 	if deletedAt.Valid {
 		u.DeletedAt = &deletedAt.Time
