@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
+import { compressImage } from '../utils/imageCompress';
 import { formatThaiDateTime, formatThaiDate } from '../utils/date';
 
 export const DIVISIONS = [
@@ -115,13 +116,27 @@ export default function UsersPage() {
     setShowUserModal(true);
   };
 
-  const handleFileChange = (e) => {
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length > 5) {
       alert('สามารถเลือกได้สูงสุดไม่เกิน 5 รูป ระบบจะเลือกเฉพาะ 5 รูปแรกให้ครับ');
-      setImageFiles(files.slice(0, 5));
-    } else {
-      setImageFiles(files);
+    }
+    const selected = files.slice(0, 5);
+    if (selected.length === 0) {
+      setImageFiles([]);
+      return;
+    }
+    setIsCompressing(true);
+    try {
+      const compressed = await Promise.all(selected.map((f) => compressImage(f)));
+      setImageFiles(compressed);
+    } catch (err) {
+      console.warn('Image compression fallback:', err);
+      setImageFiles(selected);
+    } finally {
+      setIsCompressing(false);
     }
   };
 
@@ -144,7 +159,7 @@ export default function UsersPage() {
       name: fullName,
       department: formData.department,
       status: autoStatus,
-      start_date: formData.start_date || null,
+      start_date: formData.start_date || today,
       end_date: formData.end_date || null,
     };
 
@@ -624,9 +639,9 @@ export default function UsersPage() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isCompressing}
                 >
-                  {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+                  {isCompressing ? 'กำลังประมวลผลรูป...' : isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
                 </button>
               </div>
             </form>

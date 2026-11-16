@@ -63,6 +63,12 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 
 	now := time.Now().UTC()
 	todayStr := now.Format("2006-01-02")
+	if dto.StartDate != nil && strings.TrimSpace(*dto.StartDate) == "" {
+		dto.StartDate = nil
+	}
+	if dto.EndDate != nil && strings.TrimSpace(*dto.EndDate) == "" {
+		dto.EndDate = nil
+	}
 	if dto.EndDate != nil && *dto.EndDate != "" && *dto.EndDate < todayStr {
 		dto.Status = "inactive"
 	} else {
@@ -137,10 +143,18 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 		user.Department = dto.Department
 	}
 	if dto.StartDate != nil {
-		user.StartDate = dto.StartDate
+		if strings.TrimSpace(*dto.StartDate) == "" {
+			user.StartDate = nil
+		} else {
+			user.StartDate = dto.StartDate
+		}
 	}
 	if dto.EndDate != nil {
-		user.EndDate = dto.EndDate
+		if strings.TrimSpace(*dto.EndDate) == "" {
+			user.EndDate = nil
+		} else {
+			user.EndDate = dto.EndDate
+		}
 	}
 
 	// Calculate status automatically based on end_date

@@ -3,30 +3,44 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import { formatThaiDateTime } from '../utils/date';
+import { compressImage } from '../utils/imageCompress';
 
 export default function EnrollmentPage() {
   const queryClient = useQueryClient();
   const [selectedUserId, setSelectedUserId] = useState('');
   const [imageFiles, setImageFiles] = useState([]);
+  const [isCompressing, setIsCompressing] = useState(false);
 
-  // ดึงเฉพาะพนักงานที่ "ยังไม่ได้ลงทะเบียนใบหน้า"
+  // ดึงรายชื่อพนักงานทั้งหมด เพื่อให้สามารถลงทะเบียนใหม่ หรืออัปเดตรูปเดิมได้
   const { data: users } = useQuery({
-    queryKey: ['users', 'unenrolled'],
-    queryFn: () => api.get('/api/users?unenrolled_only=true'),
+    queryKey: ['users'],
+    queryFn: () => api.get('/api/users'),
   });
 
-  const { data: jobs, isLoading } = useQuery({
+  const { data: jobs } = useQuery({
     queryKey: ['enrollment_jobs'],
     queryFn: () => api.get('/api/enrollment/pending'),
   });
 
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 5) {
+  const handleFileChange = async (e) => {
+    const rawFiles = Array.from(e.target.files);
+    if (rawFiles.length > 5) {
       alert('สามารถเลือกได้สูงสุดไม่เกิน 5 รูปครับ ระบบจะเลือกเฉพาะ 5 รูปแรกให้');
-      setImageFiles(files.slice(0, 5));
-    } else {
-      setImageFiles(files);
+    }
+    const selected = rawFiles.slice(0, 5);
+    if (selected.length === 0) {
+      setImageFiles([]);
+      return;
+    }
+    setIsCompressing(true);
+    try {
+      const compressed = await Promise.all(selected.map((f) => compressImage(f)));
+      setImageFiles(compressed);
+    } catch (err) {
+      console.warn('Image compression fallback:', err);
+      setImageFiles(selected);
+    } finally {
+      setIsCompressing(false);
     }
   };
 
@@ -47,7 +61,7 @@ export default function EnrollmentPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setImageFiles([]);
       setSelectedUserId('');
-      alert(`สร้างคำขอลงทะเบียนสำเร็จ (${imageFiles.length} รูป) — เครื่อง Kiosk จะนำภาพไปคำนวณเวกเตอร์ใบหน้าเฉลี่ยบนชิป AI และลบรูปภาพทิ้งอัตโนมัติ`);
+      alert(`ส่งคำขอลงทะเบียนใบหน้าสำเร็จ (${imageFiles.length} รูป) — ตู้ Kiosk จะนำภาพไปคำนวณเวกเตอร์ใบหน้าเฉลี่ยบนชิป AI และลบภาพทิ้งอัตโนมัติตาม PDPA`);
     },
     onError: (err) => {
       alert('เกิดข้อผิดพลาดในการสร้างคำขอ: ' + (err.message || 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'));
@@ -81,7 +95,7 @@ export default function EnrollmentPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>เลือกพนักงาน (แสดงเฉพาะคนที่ยังไม่ลงทะเบียน)</label>
+            <label>เลือกพนักงาน</label>
             <select
               className="input-field"
               value={selectedUserId}
@@ -91,19 +105,14 @@ export default function EnrollmentPage() {
               <option value="">-- กรุณาเลือกพนักงาน --</option>
               {users?.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.employee_id ? `[${u.employee_id}] ` : ''}{u.name}
+                  {u.employee_id ? `[${u.employee_id}] ` : ''}{u.name} {u.has_embedding ? '✓ (มีรูปแล้ว - เลือกเพื่อเปลี่ยนรูป)' : '• (ยังไม่มีรูป)'}
                 </option>
               ))}
             </select>
-            {users?.length === 0 && (
-              <p style={{ fontSize: '0.85rem', color: 'var(--success)', marginTop: '0.4rem', fontWeight: 'bold' }}>
-                พนักงานทุกคนในระบบลงทะเบียนใบหน้าครบเรียบร้อยแล้ว
-              </p>
-            )}
           </div>
 
           <div className="form-group">
-            <label>เลือกรูปถ่ายใบหน้า (เลือกได้สูงสุด 5 รูป — มุมหน้าตรง / เอียงเล็กน้อย)</label>
+            <label>เลือกรูปถ่ายใบหน้า (เลือกได้ 1–5 รูป — มุมหน้าตรง / เอียงเล็กน้อย)</label>
             <input
               type="file"
               accept="image/*"
@@ -113,7 +122,7 @@ export default function EnrollmentPage() {
             />
             {imageFiles.length > 0 && (
               <p style={{ fontSize: '0.85rem', color: 'var(--primary)', marginTop: '0.4rem', fontWeight: 'bold' }}>
-                เลือกแล้ว {imageFiles.length} รูป จากสูงสุด 5 รูป
+                ✓ เลือกรูปถ่ายแล้ว {imageFiles.length} รูป (พร้อมส่งประมวลผล)
               </p>
             )}
           </div>
@@ -121,9 +130,13 @@ export default function EnrollmentPage() {
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={uploadMutation.isPending || users?.length === 0}
+            disabled={uploadMutation.isPending || isCompressing || !selectedUserId || imageFiles.length === 0}
           >
-            {uploadMutation.isPending ? 'กำลังอัปโหลด...' : `ส่งคำขอสร้าง Embedding (${imageFiles.length} รูป)`}
+            {isCompressing
+              ? 'กำลังเตรียมรูปภาพ...'
+              : uploadMutation.isPending
+              ? 'กำลังอัปโหลด...'
+              : `ส่งคำขอสร้าง Embedding (${imageFiles.length} รูป)`}
           </button>
         </form>
       </div>

@@ -23,7 +23,7 @@ recognition:
 models:
   detect_model: "models/scrfd_2.5g.hef"        # or models/scrfd_10g.hef
   embedding_model: "models/arcface_mobilefacenet.hef"
-  anti_spoof_model: "models/MiniFASNetV2.onnx" # โมเดลตรวจจับคนจริง (Passive Liveness)
+  anti_spoof_model: "models/MiniFASNetV1SE.onnx" # โมเดลตรวจจับคนจริง (Passive Liveness)
 
 camera:
   width: 640

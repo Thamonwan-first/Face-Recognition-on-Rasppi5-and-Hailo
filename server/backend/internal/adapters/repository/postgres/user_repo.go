@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"attendance-backend/internal/entity"
@@ -81,17 +82,73 @@ func (r *userRepo) List(ctx context.Context, unenrolledOnly bool) ([]*entity.Use
 }
 
 func (r *userRepo) Create(ctx context.Context, u *entity.User) error {
+	var empID sql.NullString
+	if strings.TrimSpace(u.EmployeeID) != "" {
+		empID = sql.NullString{String: strings.TrimSpace(u.EmployeeID), Valid: true}
+	}
+	var title, fName, lName, dept, photoURL sql.NullString
+	if strings.TrimSpace(u.Title) != "" {
+		title = sql.NullString{String: strings.TrimSpace(u.Title), Valid: true}
+	}
+	if strings.TrimSpace(u.FirstName) != "" {
+		fName = sql.NullString{String: strings.TrimSpace(u.FirstName), Valid: true}
+	}
+	if strings.TrimSpace(u.LastName) != "" {
+		lName = sql.NullString{String: strings.TrimSpace(u.LastName), Valid: true}
+	}
+	if strings.TrimSpace(u.Department) != "" {
+		dept = sql.NullString{String: strings.TrimSpace(u.Department), Valid: true}
+	}
+	if strings.TrimSpace(u.PhotoURL) != "" {
+		photoURL = sql.NullString{String: strings.TrimSpace(u.PhotoURL), Valid: true}
+	}
+	var startDate, endDate sql.NullString
+	if u.StartDate != nil && strings.TrimSpace(*u.StartDate) != "" {
+		startDate = sql.NullString{String: strings.TrimSpace(*u.StartDate), Valid: true}
+	}
+	if u.EndDate != nil && strings.TrimSpace(*u.EndDate) != "" {
+		endDate = sql.NullString{String: strings.TrimSpace(*u.EndDate), Valid: true}
+	}
+
 	query := `
 	INSERT INTO users (id, employee_id, title, first_name, last_name, name, department, status, start_date, end_date, photo_url, version, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, nextval('user_version_seq'), $12, $13)
 	RETURNING version
 	`
 	err := r.db.QueryRowContext(ctx, query,
-		u.ID, u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.PhotoURL, u.CreatedAt, u.UpdatedAt).Scan(&u.Version)
+		u.ID, empID, title, fName, lName, u.Name, dept, u.Status, startDate, endDate, photoURL, u.CreatedAt, u.UpdatedAt).Scan(&u.Version)
 	return err
 }
 
 func (r *userRepo) Update(ctx context.Context, u *entity.User) error {
+	var empID sql.NullString
+	if strings.TrimSpace(u.EmployeeID) != "" {
+		empID = sql.NullString{String: strings.TrimSpace(u.EmployeeID), Valid: true}
+	}
+	var title, fName, lName, dept, photoURL sql.NullString
+	if strings.TrimSpace(u.Title) != "" {
+		title = sql.NullString{String: strings.TrimSpace(u.Title), Valid: true}
+	}
+	if strings.TrimSpace(u.FirstName) != "" {
+		fName = sql.NullString{String: strings.TrimSpace(u.FirstName), Valid: true}
+	}
+	if strings.TrimSpace(u.LastName) != "" {
+		lName = sql.NullString{String: strings.TrimSpace(u.LastName), Valid: true}
+	}
+	if strings.TrimSpace(u.Department) != "" {
+		dept = sql.NullString{String: strings.TrimSpace(u.Department), Valid: true}
+	}
+	if strings.TrimSpace(u.PhotoURL) != "" {
+		photoURL = sql.NullString{String: strings.TrimSpace(u.PhotoURL), Valid: true}
+	}
+	var startDate, endDate sql.NullString
+	if u.StartDate != nil && strings.TrimSpace(*u.StartDate) != "" {
+		startDate = sql.NullString{String: strings.TrimSpace(*u.StartDate), Valid: true}
+	}
+	if u.EndDate != nil && strings.TrimSpace(*u.EndDate) != "" {
+		endDate = sql.NullString{String: strings.TrimSpace(*u.EndDate), Valid: true}
+	}
+
 	query := `
 	UPDATE users SET
 		employee_id = $1, title = $2, first_name = $3, last_name = $4, name = $5, department = $6, status = $7,
@@ -102,7 +159,7 @@ func (r *userRepo) Update(ctx context.Context, u *entity.User) error {
 	RETURNING version
 	`
 	err := r.db.QueryRowContext(ctx, query,
-		u.EmployeeID, u.Title, u.FirstName, u.LastName, u.Name, u.Department, u.Status, u.StartDate, u.EndDate, u.PhotoURL, u.UpdatedAt, u.ID).Scan(&u.Version)
+		empID, title, fName, lName, u.Name, dept, u.Status, startDate, endDate, photoURL, u.UpdatedAt, u.ID).Scan(&u.Version)
 	return err
 }
 

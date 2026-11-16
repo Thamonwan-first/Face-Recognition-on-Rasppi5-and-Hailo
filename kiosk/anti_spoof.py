@@ -1,6 +1,6 @@
 """
 Silent Face Anti-Spoofing (Passive Liveness Detection)
-Uses MiniFASNetV2 ONNX model (Multi-scale face crop + Texture/Moiré/Paper detection)
+Uses MiniFASNet (V1SE / V2) ONNX model (Multi-scale face crop + Texture/Moiré/Paper detection)
 Runs efficiently via OpenCV DNN.
 """
 from pathlib import Path
@@ -13,20 +13,33 @@ logger = logging.getLogger(__name__)
 
 class AntiSpoofDetector:
     """
-    MiniFASNetV2 Passive Liveness Detection.
+    MiniFASNet Passive Liveness Detection.
     Class 1: Real Face (Live Person)
     Class 0 / 2: Fake Face (Paper photo, Screen replay, Video)
     """
-    def __init__(self, model_path: str = None, scale: float = 2.7, threshold: float = 0.85):
-        self.scale = scale
+    def __init__(self, model_path: str = None, scale: float = None, threshold: float = 0.85):
         self.threshold = threshold
         self.net = None
         self.enabled = False
 
         if model_path is None:
-            model_path = Path(__file__).resolve().parent / "models" / "MiniFASNetV2.onnx"
+            model_path = Path(__file__).resolve().parent / "models" / "MiniFASNetV1SE.onnx"
+            if not model_path.is_file():
+                model_path = Path(__file__).resolve().parent / "models" / "MiniFASNetV2.onnx"
         else:
             model_path = Path(model_path)
+            if not model_path.is_absolute():
+                resolved = (Path(__file__).resolve().parent / model_path).resolve()
+                if resolved.is_file():
+                    model_path = resolved
+
+        # Determine scale: MiniFASNetV1SE uses 4.0 (broad border context), V2 uses 2.7
+        if scale is not None:
+            self.scale = scale
+        elif "V1SE" in model_path.name or "4.0" in model_path.name or "4_0" in model_path.name:
+            self.scale = 4.0
+        else:
+            self.scale = 2.7
 
         if model_path.is_file():
             try:
@@ -34,7 +47,10 @@ class AntiSpoofDetector:
                 self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
                 self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
                 self.enabled = True
-                logger.info("🛡️ Passive Anti-Spoofing active using MiniFASNetV2 (%s, threshold=%.2f)", model_path.name, self.threshold)
+                logger.info(
+                    "🛡️ Passive Anti-Spoofing active using %s (scale=%.1f, threshold=%.2f)",
+                    model_path.name, self.scale, self.threshold
+                )
             except Exception as e:
                 logger.warning("Could not load Anti-Spoofing model: %s", e)
         else:

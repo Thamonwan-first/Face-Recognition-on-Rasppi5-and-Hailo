@@ -80,9 +80,9 @@ class RecognitionWorker(QThread):
         self.current_direction = current_direction
         self._running = True
 
-        # Initialize Passive Anti-Spoofing Detector (MiniFASNetV2)
+        # Initialize Passive Anti-Spoofing Detector (MiniFASNetV1SE)
         if getattr(config, "anti_spoof_enabled", True):
-            model_p = getattr(config, "anti_spoof_model_path", None)
+            model_p = getattr(config, "anti_spoof_model", getattr(config, "anti_spoof_model_path", None))
             thresh = getattr(config, "anti_spoof_threshold", 0.85)
             self.anti_spoof = AntiSpoofDetector(model_path=model_p, threshold=thresh)
         else:
@@ -133,14 +133,16 @@ class RecognitionWorker(QThread):
                     x1, y1, x2, y2 = f["bbox"]
                     landmarks = f.get("landmarks", [])
 
-                    # 1. Passive Anti-Spoofing Check (MiniFASNetV2)
-                    is_spoof_attempt = False
+                    # 1. Passive Anti-Spoofing Check (MiniFASNetV1SE)
                     if self.anti_spoof and self.anti_spoof.enabled:
                         is_real, spoof_score = self.anti_spoof.check_liveness(frame_rgb, [x1, y1, x2, y2])
                         if not is_real:
-                            is_spoof_attempt = True
                             self.spoof_detected.emit()
                             logger.info("🛡️ ตรวจพบ Anti-Spoof (คะแนนคนจริงต่ำ: %.2f)", spoof_score)
+                            # วาดกรอบสีส้ม-แดงแจ้งเตือนว่าเป็นภาพปลอม และข้ามการบันทึกเวลา
+                            draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 69, 0), thickness=2)
+                            cv2.putText(annotated, "Spoof Detected", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 69, 0), 2)
+                            continue
 
                     # 2. 5-point alignment & ArcFace embedding
                     if len(landmarks) >= 5:
@@ -196,7 +198,6 @@ class RecognitionWorker(QThread):
                                 self.face_recognized.emit(name, conf, "EXPIRED", emp_id, dept, photo_path, True)
                                 logger.warning("⚠️ พนักงาน %s (%s) หมดอายุสัญญาจ้าง — แสดงผลบนหน้าจอแต่ไม่บันทึกเวลา", name, emp_id)
                             else:
-                                note_msg = "ตรวจพบ Anti-Spoof" if is_spoof_attempt else ""
                                 rec = self.db.record_attendance(
                                     user_id,
                                     conf,
@@ -205,7 +206,7 @@ class RecognitionWorker(QThread):
                                     self.config.debounce_seconds,
                                     clock_synced=self._is_clock_synced(),
                                     snapshot_b64=snapshot_b64,
-                                    notes=note_msg,
+                                    notes="",
                                 )
                                 if rec:
                                     self._recent_scans[user_id] = now
