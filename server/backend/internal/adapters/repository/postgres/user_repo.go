@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"attendance-backend/internal/entity"
 	"attendance-backend/internal/ports"
