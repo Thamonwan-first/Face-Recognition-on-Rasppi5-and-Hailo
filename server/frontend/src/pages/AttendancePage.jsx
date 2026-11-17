@@ -81,12 +81,14 @@ export default function AttendancePage() {
       const query = params.toString() ? `?${params.toString()}` : '';
       return api.get(`/api/attendance/pairs${query}`);
     },
+    refetchInterval: 3000,
   });
 
   // 2. Fetch Unrecognized Scans
   const { data: unrecognizedScans, isLoading: isUnrecLoading } = useQuery({
     queryKey: ['unrecognized_scans'],
     queryFn: () => api.get('/api/attendance/unrecognized?resolved=false'),
+    refetchInterval: 3000,
   });
 
   // 3. Fetch devices for dropdown filter

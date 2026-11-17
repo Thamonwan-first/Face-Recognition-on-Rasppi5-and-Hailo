@@ -61,7 +61,7 @@ def main() -> int:
     heartbeat_worker.start()
 
     # 5. Launch PyQt5 Touchscreen UI
-    app, window = create_app(config, camera, detector, db)
+    app, window = create_app(config, camera, detector, db, on_attendance_recorded=outbox_worker.trigger_sync)
 
     # Connect user sync updates to refresh UI gallery
     user_sync_worker = UserSyncWorker(config.db_full_path, config, on_users_updated=lambda: window.worker.reload_gallery())

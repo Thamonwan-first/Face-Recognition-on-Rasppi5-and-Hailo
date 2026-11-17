@@ -13,12 +13,12 @@ server:
   api_key: "changeme-generate-with-openssl-rand-hex-32"
 
 recognition:
-  threshold: 0.68          # Cosine similarity threshold (0.60 - 0.75)
+  threshold: 0.52          # Cosine similarity threshold (0.50 - 0.60)
   debounce_seconds: 30     # Prevent duplicate scans within N seconds
   min_enroll_images: 3     # Minimum photos needed for face registration
   max_enroll_images: 5     # Maximum photos
   anti_spoof_enabled: true # เปิดใช้งาน AI ตรวจสอบคนจริง ป้องกันรูปถ่าย/จอมือถือ
-  anti_spoof_threshold: 0.85 # ค่าความมั่นใจคนจริง (0.80 - 0.95)
+  anti_spoof_threshold: 0.80 # ค่าความมั่นใจคนจริง (0.75 - 0.85)
 
 models:
   detect_model: "models/scrfd_2.5g.hef"        # or models/scrfd_10g.hef
@@ -34,7 +34,7 @@ camera:
   mirror: false            # true = selfie mode (กลับด้านแนวนอนเหมือนส่องกระจก)
 
 sync:
-  interval_seconds: 10
+  interval_seconds: 3
   batch_size: 50
   user_sync_interval_seconds: 30
   heartbeat_interval_seconds: 60

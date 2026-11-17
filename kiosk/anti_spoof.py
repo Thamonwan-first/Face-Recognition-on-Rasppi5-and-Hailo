@@ -109,7 +109,8 @@ class AntiSpoofDetector:
             # Convert RGB camera frame to BGR for MiniFASNet
             img_bgr = cv2.cvtColor(frame_bgr_or_rgb, cv2.COLOR_RGB2BGR)
             face_crop = self._crop_face(img_bgr, bbox_xyxy)
-            blob = cv2.dnn.blobFromImage(face_crop, scalefactor=1.0, size=(80, 80), swapRB=False)
+            # MiniFASNet was trained with PyTorch ToTensor() -> scales [0, 255] to [0.0, 1.0]
+            blob = cv2.dnn.blobFromImage(face_crop, scalefactor=1.0 / 255.0, size=(80, 80), swapRB=False)
             self.net.setInput(blob)
             logits = self.net.forward()
 

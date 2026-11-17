@@ -212,12 +212,13 @@ class MainWindow(QMainWindow):
     - ไม่มีการ์ดล่างเกะกะสายตา
     - แจ้งเตือนด้วย Floating Minimal Card ตรงกลางจอ
     """
-    def __init__(self, config, camera, detector, database):
+    def __init__(self, config, camera, detector, database, on_attendance_recorded=None):
         super().__init__()
         self.config = config
         self.camera = camera
         self.detector = detector
         self.db = database
+        self.on_attendance_recorded = on_attendance_recorded
         self.current_direction = config.device_direction
         self._active_popup = None
 
@@ -326,7 +327,12 @@ class MainWindow(QMainWindow):
 
     def _start_worker(self):
         self.worker = RecognitionWorker(
-            self.camera, self.detector, self.db, self.config, self.current_direction
+            self.camera,
+            self.detector,
+            self.db,
+            self.config,
+            self.current_direction,
+            on_attendance_recorded=self.on_attendance_recorded,
         )
         self.worker.frame_ready.connect(self._update_frame)
         self.worker.face_recognized.connect(self._on_recognized)
@@ -401,10 +407,10 @@ class MainWindow(QMainWindow):
         event.accept()
 
 
-def create_app(config, camera, detector, database):
+def create_app(config, camera, detector, database, on_attendance_recorded=None):
     app = QApplication(sys.argv)
     init_fonts()
     app.setApplicationName("FaceAttendance")
     app.setFont(QFont(FONT_FAMILY, 11))
-    window = MainWindow(config, camera, detector, database)
+    window = MainWindow(config, camera, detector, database, on_attendance_recorded=on_attendance_recorded)
     return app, window

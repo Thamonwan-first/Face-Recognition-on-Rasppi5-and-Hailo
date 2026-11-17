@@ -71,19 +71,20 @@ class RecognitionWorker(QThread):
     unknown_detected = pyqtSignal()
     spoof_detected = pyqtSignal()
 
-    def __init__(self, camera, detector, database, config, current_direction="AUTO"):
+    def __init__(self, camera, detector, database, config, current_direction="AUTO", on_attendance_recorded=None):
         super().__init__()
         self.camera = camera
         self.detector = detector
         self.db = database
         self.config = config
         self.current_direction = current_direction
+        self.on_attendance_recorded = on_attendance_recorded
         self._running = True
 
         # Initialize Passive Anti-Spoofing Detector (MiniFASNetV1SE)
         if getattr(config, "anti_spoof_enabled", True):
             model_p = getattr(config, "anti_spoof_model", getattr(config, "anti_spoof_model_path", None))
-            thresh = getattr(config, "anti_spoof_threshold", 0.85)
+            thresh = getattr(config, "anti_spoof_threshold", 0.80)
             self.anti_spoof = AntiSpoofDetector(model_path=model_p, threshold=thresh)
         else:
             self.anti_spoof = None
@@ -102,6 +103,7 @@ class RecognitionWorker(QThread):
         else:
             self.gallery_cache = ([], None)
         self.user_lookup = {u["user_id"]: u for u in active}
+        logger.info("Loaded %d face embedding(s) into active recognition gallery", len(user_ids))
 
     def set_direction(self, direction):
         self.current_direction = direction
@@ -183,8 +185,8 @@ class RecognitionWorker(QThread):
                             except Exception:
                                 pass
 
-                        display_name = f"{name} (Inactive)" if is_contract_expired else name
-                        cv2.putText(annotated, display_name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255) if is_contract_expired else (255, 255, 255), 2)
+                        if is_contract_expired:
+                            draw_corner_brackets(annotated, x1, y1, x2, y2, color=(0, 0, 255), thickness=2)
 
                         # Fast in-memory debounce check before querying SQLite in 30fps loop
                         now = time.time()
@@ -215,6 +217,11 @@ class RecognitionWorker(QThread):
                                         cutoff = now - (2 * self.config.debounce_seconds)
                                         self._recent_scans = {uid: t for uid, t in self._recent_scans.items() if t > cutoff}
                                     self.face_recognized.emit(name, conf, rec["direction"], emp_id, dept, photo_path, False)
+                                    if self.on_attendance_recorded:
+                                        try:
+                                            self.on_attendance_recorded()
+                                        except Exception as cb_err:
+                                            logger.debug("on_attendance_recorded failed: %s", cb_err)
                     else:
                         now = time.time()
                         if not hasattr(self, '_unknown_face_start') or self._unknown_face_start is None:

@@ -23,6 +23,11 @@ class OutboxWorker:
         self.conn = None
         self._running = False
         self._thread = None
+        self._sync_event = threading.Event()
+
+    def trigger_sync(self):
+        """Immediately wake up outbox sync thread to send events to server without waiting."""
+        self._sync_event.set()
 
     def start(self):
         self._running = True
@@ -32,6 +37,7 @@ class OutboxWorker:
 
     def stop(self):
         self._running = False
+        self._sync_event.set()
         if self._thread:
             self._thread.join(timeout=2.0)
         if self.conn and isinstance(self.db_source, (str, Path)):
@@ -51,11 +57,13 @@ class OutboxWorker:
 
     def _loop(self):
         while self._running:
+            self._sync_event.clear()
             try:
                 self._sync_pending()
             except Exception as e:
                 logger.error("Outbox sync error: %s", e)
-            time.sleep(self.config.sync_interval_seconds if hasattr(self.config, 'sync_interval_seconds') else 10)
+            interval = getattr(self.config, 'sync_interval_seconds', 3)
+            self._sync_event.wait(timeout=interval)
 
     def _sync_pending(self):
         conn = self._get_connection()

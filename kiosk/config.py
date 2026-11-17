@@ -80,7 +80,7 @@ class KioskConfig:
         """Safely format server URL for an endpoint."""
         return f"{self.server_url.rstrip('/')}/{endpoint.lstrip('/')}"
 
-    recognition_threshold: float = float(_RAW.get("recognition", {}).get("threshold", os.getenv("RECOGNITION_THRESHOLD", 0.68)))
+    recognition_threshold: float = float(_RAW.get("recognition", {}).get("threshold", os.getenv("RECOGNITION_THRESHOLD", 0.52)))
     debounce_seconds: int = int(_RAW.get("recognition", {}).get("debounce_seconds", 30))
     min_enroll_images: int = int(_RAW.get("recognition", {}).get("min_enroll_images", 3))
     max_enroll_images: int = int(_RAW.get("recognition", {}).get("max_enroll_images", 5))
@@ -89,7 +89,7 @@ class KioskConfig:
     embedding_model: str = _RAW.get("models", {}).get("embedding_model", "models/arcface_mobilefacenet.hef")
     anti_spoof_model: str = _RAW.get("models", {}).get("anti_spoof_model", "models/MiniFASNetV1SE.onnx")
     anti_spoof_enabled: bool = bool(_RAW.get("recognition", {}).get("anti_spoof_enabled", True))
-    anti_spoof_threshold: float = float(_RAW.get("recognition", {}).get("anti_spoof_threshold", 0.85))
+    anti_spoof_threshold: float = float(_RAW.get("recognition", {}).get("anti_spoof_threshold", 0.80))
 
     camera_width: int = int(_RAW.get("camera", {}).get("width", 640))
     camera_height: int = int(_RAW.get("camera", {}).get("height", 480))
@@ -98,6 +98,7 @@ class KioskConfig:
     camera_mirror: bool = bool(_RAW.get("camera", {}).get("mirror", os.getenv("CAMERA_MIRROR", "false").lower() == "true"))
 
     db_path: str = _RAW.get("database", {}).get("path", "data/kiosk.db")
+    sync_interval_seconds: int = int(_RAW.get("sync", {}).get("interval_seconds", 3))
     fullscreen: bool = bool(_RAW.get("ui", {}).get("fullscreen", True))
     orientation: str = _RAW.get("ui", {}).get("orientation", "portrait")
     display_width: int = int(_RAW.get("ui", {}).get("width", 480))
