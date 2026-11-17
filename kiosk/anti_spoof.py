@@ -29,9 +29,15 @@ class AntiSpoofDetector:
         else:
             model_path = Path(model_path)
             if not model_path.is_absolute():
-                resolved = (Path(__file__).resolve().parent / model_path).resolve()
-                if resolved.is_file():
-                    model_path = resolved
+                candidates = [
+                    (Path(__file__).resolve().parent / model_path).resolve(),
+                    (Path(__file__).resolve().parent / "models" / model_path.name).resolve(),
+                    Path.cwd() / model_path,
+                ]
+                for cand in candidates:
+                    if cand.is_file():
+                        model_path = cand
+                        break
 
         # Determine scale: MiniFASNetV1SE uses 4.0 (broad border context), V2 uses 2.7
         if scale is not None:

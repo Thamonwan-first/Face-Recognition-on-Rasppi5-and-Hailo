@@ -140,11 +140,15 @@ class RecognitionWorker(QThread):
                         is_real, spoof_score = self.anti_spoof.check_liveness(frame_rgb, [x1, y1, x2, y2])
                         if not is_real:
                             self.spoof_detected.emit()
-                            logger.info("🛡️ ตรวจพบ Anti-Spoof (คะแนนคนจริงต่ำ: %.2f)", spoof_score)
+                            logger.info("🛡️ ตรวจพบ Anti-Spoof รูปถ่าย/หน้าจอ (ความมั่นใจคนจริงต่ำ: %.2f)", spoof_score)
                             # วาดกรอบสีส้ม-แดงแจ้งเตือนว่าเป็นภาพปลอม และข้ามการบันทึกเวลา
                             draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 69, 0), thickness=2)
                             cv2.putText(annotated, "Spoof Detected", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 69, 0), 2)
                             continue
+                    else:
+                        if not getattr(self, '_anti_spoof_warned', False):
+                            logger.warning("⚠️ Anti-Spoofing model is NOT loaded (file missing or disabled) — checking skipped!")
+                            self._anti_spoof_warned = True
 
                     # 2. 5-point alignment & ArcFace embedding
                     if len(landmarks) >= 5:

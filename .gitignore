@@ -32,6 +32,8 @@ env/
 # HEF / ONNX model files (large binaries — download or copy separately)
 *.hef
 *.onnx
+!kiosk/models/MiniFASNetV1SE.onnx
+!kiosk/models/MiniFASNetV2.onnx
 
 # Node.js
 node_modules/
