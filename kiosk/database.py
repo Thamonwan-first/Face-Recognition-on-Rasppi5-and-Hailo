@@ -125,7 +125,8 @@ class Database:
         try:
             last_dt = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
             now_dt = datetime.now(timezone.utc)
-            return (now_dt - last_dt).total_seconds() < debounce_seconds
+            diff = (now_dt - last_dt).total_seconds()
+            return 0 <= diff < debounce_seconds
         except Exception:
             return False
 

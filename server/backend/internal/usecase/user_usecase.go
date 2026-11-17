@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -94,12 +95,13 @@ func (uc *UserUseCase) Create(ctx context.Context, adminID string, dto *UserDTO)
 		return nil, err
 	}
 
+	createDetail, _ := json.Marshal(map[string]string{"name": user.Name, "employee_id": user.EmployeeID})
 	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &adminID,
 		Action:     "user.create",
 		TargetType: "user",
 		TargetID:   user.ID,
-		Detail:     fmt.Sprintf(`{"name":"%s","employee_id":"%s"}`, user.Name, user.EmployeeID),
+		Detail:     string(createDetail),
 		CreatedAt:  now,
 	})
 
@@ -112,21 +114,13 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 		return nil, err
 	}
 
-	if dto.EmployeeID != "" {
-		user.EmployeeID = dto.EmployeeID
-	}
-	if dto.Title != "" {
-		user.Title = dto.Title
-	}
-	if dto.FirstName != "" {
-		user.FirstName = dto.FirstName
-	}
-	if dto.LastName != "" {
-		user.LastName = dto.LastName
-	}
+	user.EmployeeID = dto.EmployeeID
+	user.Title = dto.Title
+	user.FirstName = dto.FirstName
+	user.LastName = dto.LastName
 	if dto.Name != "" {
 		user.Name = dto.Name
-	} else if dto.FirstName != "" || dto.LastName != "" {
+	} else {
 		parts := []string{}
 		if user.Title != "" {
 			parts = append(parts, user.Title)
@@ -139,9 +133,7 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 		}
 		user.Name = strings.TrimSpace(strings.Join(parts, " "))
 	}
-	if dto.Department != "" {
-		user.Department = dto.Department
-	}
+	user.Department = dto.Department
 	if dto.StartDate != nil {
 		if strings.TrimSpace(*dto.StartDate) == "" {
 			user.StartDate = nil
@@ -171,12 +163,13 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 		return nil, err
 	}
 
+	updateDetail, _ := json.Marshal(map[string]any{"name": user.Name, "version": user.Version})
 	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
 		AdminID:    &adminID,
 		Action:     "user.update",
 		TargetType: "user",
 		TargetID:   user.ID,
-		Detail:     fmt.Sprintf(`{"name":"%s","version":%d}`, user.Name, user.Version),
+		Detail:     string(updateDetail),
 		CreatedAt:  user.UpdatedAt,
 	})
 

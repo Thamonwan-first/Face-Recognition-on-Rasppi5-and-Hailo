@@ -269,37 +269,188 @@ export default function AttendancePage() {
     setIsResolveModalOpen(true);
   };
 
-  const handleExportCSV = () => {
-    if (!pairs || pairs.length === 0) return;
-    const headers = ['วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'เวลาเข้างาน', 'เวลาออกงาน', 'สถานะ'];
-    const rows = pairs.map((p) => {
-      let statusLabel = 'ตรงเวลา';
-      if (p.status === 'absent') statusLabel = 'ยังไม่สแกน';
-      else if (p.is_manual || p.status === 'adjusted') statusLabel = 'แก้ไขโดยผู้ดูแล';
-      else if (p.status === 'late') statusLabel = 'มาสาย';
-      else if (p.status === 'incomplete') statusLabel = 'ไม่ครบเวลา';
-      else if (p.status === 'open') statusLabel = 'กำลังทำงาน';
+  const getPairStatusLabel = (p) => {
+    if (p.is_manual || p.status === 'adjusted') return 'แก้ไขโดยผู้ดูแล';
+    if (p.status === 'absent') return 'ยังไม่สแกน';
+    if (p.status === 'late') return 'มาสาย';
+    if (p.status === 'incomplete') return 'ไม่ครบเวลา';
+    if (p.status === 'open') return 'กำลังทำงาน';
+    return 'ตรงเวลา';
+  };
 
-      return [
-        p.work_date,
-        p.employee_id || '-',
-        p.name,
-        formatThaiTime(p.check_in_time),
-        formatThaiTime(p.check_out_time),
-        statusLabel,
-      ];
-    });
+  const getPairStatusClass = (p) => {
+    if (p.is_manual || p.status === 'adjusted') return 'status-adjusted';
+    if (p.status === 'absent') return 'status-absent';
+    if (p.status === 'late') return 'status-late';
+    if (p.status === 'open') return 'status-open';
+    return 'status-ontime';
+  };
 
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(','), ...rows.map((r) => r.map((f) => `"${f}"`).join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+  const getExportList = () => {
+    let list = pairs || [];
+    if (statusFilter === 'RECOGNIZED') {
+      list = filteredRecognized;
+    } else if (statusFilter === 'ABSENT') {
+      list = filteredAbsent;
+    } else {
+      list = list.filter((p) => matchesSearch(p.name) || matchesSearch(p.employee_id));
+    }
+    return list;
+  };
+
+  const handleExportExcel = () => {
+    const list = getExportList();
+    if (!list || list.length === 0) {
+      alert('ไม่พบข้อมูลการลงเวลาที่จะส่งออก');
+      return;
+    }
+
+    let totalHours = 0;
+    let onTimeCount = 0;
+    let lateCount = 0;
+    let absentCount = 0;
+
+    const rowsHtml = list
+      .map((p, idx) => {
+        const statusLabel = getPairStatusLabel(p);
+        const statusClass = getPairStatusClass(p);
+        const inTime = formatThaiTime(p.check_in_time);
+        const outTime = formatThaiTime(p.check_out_time);
+        const hours = p.hours_worked != null ? Number(p.hours_worked) : null;
+        if (hours != null) totalHours += hours;
+
+        if (p.status === 'late') lateCount++;
+        else if (p.status === 'absent') absentCount++;
+        else if (p.status === 'on_time' || (!p.status && inTime)) onTimeCount++;
+
+        return `
+          <tr>
+            <td class="text-center">${idx + 1}</td>
+            <td class="text-center">${p.work_date || '-'}</td>
+            <td class="text-center"><b>${p.employee_id || '-'}</b></td>
+            <td>${p.name || '-'}</td>
+            <td>${p.department || '-'}</td>
+            <td class="text-center">${inTime ? inTime + ' น.' : '-'}</td>
+            <td class="text-center">${outTime ? outTime + ' น.' : '-'}</td>
+            <td class="text-center">${hours != null ? hours.toFixed(1) + ' ชม.' : '-'}</td>
+            <td class="${statusClass}">${statusLabel}</td>
+            <td>${p.adjustment_reason || p.notes || '-'}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const dateRangeStr = startDate ? (effectiveEnd && effectiveEnd !== startDate ? `${startDate} ถึง ${effectiveEnd}` : startDate) : 'ทั้งหมด';
+    const exportedAt = new Date().toLocaleString('th-TH');
+
+    const excelHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+        <style>
+          body { font-family: 'Tahoma', 'Sarabun', 'Segoe UI', Arial, sans-serif; }
+          .title { font-size: 15pt; font-weight: bold; color: #1e3a8a; margin-bottom: 4px; }
+          .subtitle { font-size: 10pt; color: #475569; margin-bottom: 12px; }
+          table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+          th { background-color: #15803d; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; padding: 10px 12px; font-size: 10.5pt; }
+          td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 10pt; vertical-align: middle; }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .text-bold { font-weight: bold; }
+          .status-ontime { background-color: #dcfce7; color: #166534; font-weight: bold; text-align: center; }
+          .status-late { background-color: #ffedd5; color: #c2410c; font-weight: bold; text-align: center; }
+          .status-absent { background-color: #fee2e2; color: #b91c1c; font-weight: bold; text-align: center; }
+          .status-adjusted { background-color: #f3e8ff; color: #7e22ce; font-weight: bold; text-align: center; }
+          .status-open { background-color: #e0f2fe; color: #0369a1; font-weight: bold; text-align: center; }
+          .summary-row { background-color: #f8fafc; font-weight: bold; border-top: 2px solid #64748b; }
+        </style>
+      </head>
+      <body>
+        <div class="title">รายงานบันทึกเวลาปฏิบัติงาน (Attendance Report)</div>
+        <div class="subtitle">
+          ช่วงวันที่: <b>${dateRangeStr}</b> &nbsp;|&nbsp;
+          ส่งออกเมื่อ: <b>${exportedAt}</b> &nbsp;|&nbsp;
+          จำนวนพนักงานในรายงาน: <b>${list.length} คน</b>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">ลำดับ</th>
+              <th style="width: 100px;">วันที่</th>
+              <th style="width: 120px;">รหัสพนักงาน</th>
+              <th style="width: 200px;">ชื่อ-นามสกุล</th>
+              <th style="width: 200px;">สังกัด / ฝ่าย</th>
+              <th style="width: 110px;">เวลาเข้างาน</th>
+              <th style="width: 110px;">เวลาออกงาน</th>
+              <th style="width: 110px;">ชั่วโมงทำงาน</th>
+              <th style="width: 130px;">สถานะ</th>
+              <th style="width: 220px;">หมายเหตุ / เหตุผล</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+            <tr class="summary-row">
+              <td colspan="7" class="text-right text-bold">รวมชั่วโมงทำงานสะสม:</td>
+              <td class="text-center text-bold">${totalHours.toFixed(1)} ชม.</td>
+              <td colspan="2" class="text-bold">ตรงเวลา: ${onTimeCount} | สาย: ${lateCount} | ยังไม่สแกน: ${absentCount}</td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `attendance_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.href = url;
+    const dateFileStr = startDate ? (effectiveEnd && effectiveEnd !== startDate ? `${startDate}_to_${effectiveEnd}` : startDate) : 'all';
+    link.download = `attendance_report_${dateFileStr}.xls`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    const list = getExportList();
+    if (!list || list.length === 0) {
+      alert('ไม่พบข้อมูลการลงเวลาที่จะส่งออก');
+      return;
+    }
+    const headers = ['ลำดับ', 'วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'สังกัด/ฝ่าย', 'เวลาเข้างาน', 'เวลาออกงาน', 'ชั่วโมงทำงาน', 'สถานะ', 'หมายเหตุ'];
+    const rows = list.map((p, idx) => {
+      const inTime = formatThaiTime(p.check_in_time);
+      const outTime = formatThaiTime(p.check_out_time);
+      const hours = p.hours_worked != null ? Number(p.hours_worked).toFixed(1) : '-';
+      const statusLabel = getPairStatusLabel(p);
+      const reason = p.adjustment_reason || p.notes || '-';
+
+      return [
+        idx + 1,
+        p.work_date || '-',
+        p.employee_id || '-',
+        p.name || '-',
+        p.department || '-',
+        inTime ? `${inTime} น.` : '-',
+        outTime ? `${outTime} น.` : '-',
+        hours !== '-' ? `${hours} ชม.` : '-',
+        statusLabel,
+        reason,
+      ];
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.map((f) => `"${String(f).replace(/"/g, '""')}"`).join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const dateFileStr = startDate ? (effectiveEnd && effectiveEnd !== startDate ? `${startDate}_to_${effectiveEnd}` : startDate) : 'all';
+    link.download = `attendance_report_${dateFileStr}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const renderStatusBadge = (p) => {
@@ -419,7 +570,45 @@ export default function AttendancePage() {
           >
             บันทึกเวลาแทน
           </button>
-          <button onClick={handleExportCSV} className="btn" style={{ background: '#fff', border: '1px solid #d1d5db' }}>
+
+          <button
+            onClick={handleExportExcel}
+            className="btn"
+            style={{
+              background: '#15803d',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+              cursor: 'pointer',
+            }}
+            title="ดาวน์โหลดรายงานสรุปเวลาทำงานเป็นไฟล์ Excel (.xls) จัดรูปแบบพร้อมเปิดใช้งานทันที"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="16" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            ส่งออก Excel (.xls)
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="btn"
+            style={{
+              background: '#ffffff',
+              border: '1px solid #d1d5db',
+              color: '#475569',
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+            title="ดาวน์โหลดเป็นไฟล์ CSV (UTF-8)"
+          >
             ส่งออก CSV
           </button>
         </div>

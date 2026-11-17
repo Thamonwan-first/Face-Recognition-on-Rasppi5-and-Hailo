@@ -102,7 +102,7 @@ class AttendanceSuccessPopup(QDialog):
     """
     def __init__(self, parent, name, direction_text, time_str, emp_id="", division="", photo_path="", is_expired=False):
         super().__init__(parent)
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setFixedSize(430, 275)
 
@@ -382,6 +382,8 @@ class MainWindow(QMainWindow):
             self, name, dir_text, now_time, emp_id=emp_id, division=division, photo_path=photo_path, is_expired=is_expired
         )
         self._active_popup.show()
+        self._active_popup.raise_()
+        self._active_popup.activateWindow()
 
     @pyqtSlot()
     def _on_unknown(self):

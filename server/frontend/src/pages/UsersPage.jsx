@@ -182,8 +182,8 @@ export default function UsersPage() {
         form.append('user_id', targetUserId);
         for (const file of imageFiles) {
           form.append('images', file);
-          form.append('image', file);
         }
+        form.append('image', imageFiles[0]);
         await api.post('/api/enrollment', form, true);
         alert(
           editUser
@@ -434,7 +434,7 @@ export default function UsersPage() {
             })}
             {filteredUsers?.length === 0 && (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>
+                <td colSpan="10" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>
                   ไม่พบข้อมูลผู้ใช้ในระบบ
                 </td>
               </tr>

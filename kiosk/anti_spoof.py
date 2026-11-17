@@ -58,8 +58,9 @@ class AntiSpoofDetector:
 
     def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         """
-        Crop face region with scale expansion (2.7x) maintaining square aspect ratio
+        Crop face region with configurable scale expansion maintaining square aspect ratio
         and zero padding, matching official Silent-Face-Anti-Spoofing MiniFASNet.
+        Scale: V1SE=4.0 (broad border), V2=2.7 (tight crop).
         """
         src_h, src_w = image.shape[:2]
         x1, y1, x2, y2 = bbox_xyxy
