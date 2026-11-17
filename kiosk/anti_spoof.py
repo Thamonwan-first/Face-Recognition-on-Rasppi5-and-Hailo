@@ -64,42 +64,46 @@ class AntiSpoofDetector:
 
     def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         """
-        Crop face region with configurable scale expansion maintaining square aspect ratio
-        and zero padding, matching official Silent-Face-Anti-Spoofing MiniFASNet.
-        Scale: V1SE=4.0 (broad border), V2=2.7 (tight crop).
+        Crop face region with dynamic scale clamping matching official Silent-Face-Anti-Spoofing.
+        Clamps scale to frame dimensions and shifts ROI to prevent artificial black borders.
         """
         src_h, src_w = image.shape[:2]
         x1, y1, x2, y2 = bbox_xyxy
-        w = max(1, x2 - x1)
-        h = max(1, y2 - y1)
+        box_w = max(1, x2 - x1)
+        box_h = max(1, y2 - y1)
 
-        new_w = int(w * self.scale)
-        new_h = int(h * self.scale)
-        cx = int(x1 + w / 2)
-        cy = int(y1 + h / 2)
+        clamped_scale = min((src_h - 1) / box_h, min((src_w - 1) / box_w, self.scale))
+        new_w = box_w * clamped_scale
+        new_h = box_h * clamped_scale
+        cx = box_w / 2 + x1
+        cy = box_h / 2 + y1
 
-        crop_x1 = cx - new_w // 2
-        crop_y1 = cy - new_h // 2
-        crop_x2 = crop_x1 + new_w
-        crop_y2 = crop_y1 + new_h
+        left_top_x = cx - new_w / 2
+        left_top_y = cy - new_h / 2
+        right_bottom_x = cx + new_w / 2
+        right_bottom_y = cy + new_h / 2
 
-        left_pad = max(0, -crop_x1)
-        top_pad = max(0, -crop_y1)
-        right_pad = max(0, crop_x2 - src_w)
-        bottom_pad = max(0, crop_y2 - src_h)
+        if left_top_x < 0:
+            right_bottom_x -= left_top_x
+            left_top_x = 0
+        if left_top_y < 0:
+            right_bottom_y -= left_top_y
+            left_top_y = 0
+        if right_bottom_x > src_w - 1:
+            left_top_x -= right_bottom_x - src_w + 1
+            right_bottom_x = src_w - 1
+        if right_bottom_y > src_h - 1:
+            left_top_y -= right_bottom_y - src_h + 1
+            right_bottom_y = src_h - 1
 
-        in_x1 = max(0, crop_x1)
-        in_y1 = max(0, crop_y1)
-        in_x2 = min(src_w, crop_x2)
-        in_y2 = min(src_h, crop_y2)
+        x1_c = int(max(0, left_top_x))
+        y1_c = int(max(0, left_top_y))
+        x2_c = int(min(src_w - 1, right_bottom_x))
+        y2_c = int(min(src_h - 1, right_bottom_y))
 
-        cropped = image[in_y1:in_y2, in_x1:in_x2]
+        cropped = image[y1_c:y2_c, x1_c:x2_c]
         if cropped.size == 0:
             return np.zeros((80, 80, 3), dtype=np.uint8)
-
-        if left_pad > 0 or top_pad > 0 or right_pad > 0 or bottom_pad > 0:
-            cropped = cv2.copyMakeBorder(cropped, top_pad, bottom_pad, left_pad, right_pad, cv2.BORDER_CONSTANT, value=0)
-
         return cv2.resize(cropped, (80, 80))
 
     def check_liveness(self, frame_bgr_or_rgb: np.ndarray, bbox_xyxy: list) -> tuple[bool, float]:
@@ -115,8 +119,14 @@ class AntiSpoofDetector:
             # Convert RGB camera frame to BGR for MiniFASNet
             img_bgr = cv2.cvtColor(frame_bgr_or_rgb, cv2.COLOR_RGB2BGR)
             face_crop = self._crop_face(img_bgr, bbox_xyxy)
-            # MiniFASNet was trained with PyTorch ToTensor() -> scales [0, 255] to [0.0, 1.0]
-            blob = cv2.dnn.blobFromImage(face_crop, scalefactor=1.0 / 255.0, size=(80, 80), swapRB=False)
+            # MiniFASNet was trained with RetinaFace Caffe preprocessing: BGR mean subtraction (104, 117, 123)
+            blob = cv2.dnn.blobFromImage(
+                face_crop,
+                scalefactor=1.0,
+                size=(80, 80),
+                mean=(104.0, 117.0, 123.0),
+                swapRB=False,
+            )
             self.net.setInput(blob)
             logits = self.net.forward()
 
