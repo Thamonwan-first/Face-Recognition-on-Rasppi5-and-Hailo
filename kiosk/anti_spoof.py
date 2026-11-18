@@ -68,6 +68,8 @@ class AntiSpoofDetector:
         self._spoof_release_ema_threshold = 0.65
         self._real_to_spoof_frames = 2
         self._last_raw_real_score = 1.0
+        self._recognition_cooldown_until = 0.0
+        self._recognition_cooldown_seconds = 5.0
 
         models_dir = Path(__file__).resolve().parent / "models"
         if model_path:
@@ -104,6 +106,18 @@ class AntiSpoofDetector:
         self._state = "EVALUATING"
         self._spoof_entered_at = 0.0
         self._last_raw_real_score = 1.0
+        self._recognition_cooldown_until = 0.0
+
+    def is_recognition_allowed(self) -> bool:
+        """Require a real state after the post-spoof cooldown."""
+        if self._state != "REAL":
+            return False
+        if time.monotonic() < self._recognition_cooldown_until:
+            return False
+        return (
+            self._real_streak >= self._spoof_release_real_frames
+            and self._ema_score >= self._spoof_release_ema_threshold
+        )
 
     def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         src_h, src_w = image.shape[:2]
@@ -135,6 +149,7 @@ class AntiSpoofDetector:
             ):
                 self._state = "SPOOF"
                 self._spoof_entered_at = time.monotonic()
+                self._recognition_cooldown_until = time.monotonic() + self._recognition_cooldown_seconds
         elif self._real_streak >= 6 and (
             self._ema_score >= self._spoof_release_ema_threshold
         ):

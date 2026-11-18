@@ -61,6 +61,15 @@ class TestAntiSpoof(unittest.TestCase):
         detector._ema_score = 0.20
         self.assertEqual(detector.update_state(), "SPOOF")
 
+    def test_recognition_is_blocked_during_post_spoof_cooldown(self):
+        detector = AntiSpoofDetector(threshold=0.60)
+        detector._state = "SPOOF"
+        detector._spoof_entered_at = time.monotonic()
+        detector._real_streak = 90
+        detector._ema_score = 0.70
+        detector._recognition_cooldown_until = time.monotonic() + 5.0
+        self.assertFalse(detector.is_recognition_allowed())
+
 
 if __name__ == "__main__":
     unittest.main()

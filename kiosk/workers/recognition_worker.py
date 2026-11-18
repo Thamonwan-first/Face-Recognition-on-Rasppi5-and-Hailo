@@ -158,6 +158,9 @@ class RecognitionWorker(QThread):
                             # Multi-frame warmup: draw clean white brackets and continue evaluating (takes ~30-60ms)
                             draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 255, 255), thickness=1)
                             continue
+                        elif not self.anti_spoof.is_recognition_allowed():
+                            draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 255, 255), thickness=1)
+                            continue
                     else:
                         if not getattr(self, '_anti_spoof_warned', False):
                             logger.warning("⚠️ Anti-Spoofing model is NOT loaded (file missing or disabled) — checking skipped!")
