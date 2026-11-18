@@ -57,7 +57,8 @@ class Camera:
                         "AfMode": 2,
                         "AwbEnable": True,
                         "AeEnable": True,
-                        "NoiseReductionMode": 3,
+                        "NoiseReductionMode": 1,
+                        "FrameDurationLimits": (33333, 33333),
                     })
                 except Exception as control_error:
                     logger.warning("Picamera2 liveness controls unavailable: %s", control_error)

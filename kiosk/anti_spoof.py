@@ -64,10 +64,10 @@ class AntiSpoofDetector:
         self._fake_streak = 0
         self._state = "EVALUATING"
         self._spoof_entered_at = 0.0
-        self._spoof_hold_seconds = 3.0
-        self._spoof_release_real_frames = 90
-        self._spoof_release_real_threshold = max(threshold, 0.60)
-        self._spoof_release_ema_threshold = max(threshold - 0.20, 0.55)
+        self._spoof_hold_seconds = 1.0
+        self._spoof_release_real_frames = 12
+        self._spoof_release_real_threshold = threshold
+        self._spoof_release_ema_threshold = max(threshold - 0.10, 0.50)
         self._real_to_spoof_frames = 2
         self._last_raw_real_score = 1.0
         self._recognition_cooldown_until = 0.0
@@ -257,8 +257,8 @@ class AntiSpoofDetector:
                 self._real_streak = 0
 
             # State decision with hysteresis:
-            # Once SPOOF is confirmed, keep it latched for at least 1.5 seconds
-            # and require 30 consecutive real frames before releasing it.
+            # Once SPOOF is confirmed, keep it latched briefly
+            # and require a sustained real streak before releasing it.
             state = self.update_state()
             return state, float(self._ema_score)
 
