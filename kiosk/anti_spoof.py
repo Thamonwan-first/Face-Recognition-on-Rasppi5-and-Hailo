@@ -47,13 +47,14 @@ def _get_new_box(src_w, src_h, bbox, scale):
 
 class AntiSpoofDetector:
     """
-    MiniFASNetV1SE with Sustained Verification Filter:
+    MiniFASNetV1SE/V2 Multi-Scale Ensemble with Sustained Verification Filter:
     - Real person: Must sustain a strong score for a long consecutive streak
     - Phone / Fake: Requires sustained low scores and remains SPOOF with hysteresis
     """
     def __init__(self, model_path: str = None, threshold: float = 0.60):
         self.threshold = threshold
         self.net = None
+        self.nets = {}
         self.scale = 4.0
         self.enabled = False
 
@@ -72,31 +73,56 @@ class AntiSpoofDetector:
         self._recognition_cooldown_seconds = 5.0
 
         models_dir = Path(__file__).resolve().parent / "models"
-        if model_path:
-            mp = Path(model_path)
-            if not mp.is_absolute():
-                mp = (Path(__file__).resolve().parent / model_path).resolve()
-            resolved_path = mp if mp.is_file() else mp
-        else:
-            resolved_path = models_dir / "MiniFASNetV1SE.onnx"
-            if not resolved_path.is_file():
-                resolved_path = models_dir / "MiniFASNetV2.onnx"
+        v1_path = models_dir / "MiniFASNetV1SE.onnx"
+        v2_path = models_dir / "MiniFASNetV2.onnx"
 
-        if resolved_path.is_file():
+        if model_path:
+            configured_path = Path(model_path)
+            if not configured_path.is_absolute():
+                configured_path = (Path(__file__).resolve().parent / configured_path).resolve()
+            if not configured_path.is_file():
+                v1_path = None
+                v2_path = None
+            elif "V1" in configured_path.name.upper():
+                v1_path = configured_path
+            elif "V2" in configured_path.name.upper():
+                v2_path = configured_path
+
+        model_specs = (
+            ("V1SE", v1_path, 4.0),
+            ("V2", v2_path, 2.7),
+        )
+
+        for name, resolved_path, scale in model_specs:
+            if resolved_path is None:
+                continue
+            if not resolved_path.is_file():
+                logger.warning("Anti-Spoofing model not found at %s", resolved_path)
+                continue
             try:
-                self.net = cv2.dnn.readNetFromONNX(str(resolved_path))
-                self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-                self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-                self.enabled = True
-                self.scale = 4.0 if "V1SE" in resolved_path.name else 2.7
+                net = cv2.dnn.readNetFromONNX(str(resolved_path))
+                net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+                net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+                self.nets[name] = {"net": net, "scale": scale}
                 logger.info(
-                    "🛡️ Passive Anti-Spoofing active using %s (scale=%.1f, threshold=%.2f)",
-                    resolved_path.name, self.scale, self.threshold
+                    "🛡️ Loaded Anti-Spoofing model %s (scale=%.1f)",
+                    resolved_path.name, scale
                 )
             except Exception as e:
-                logger.warning("Could not load Anti-Spoofing model: %s", e)
-        else:
-            logger.warning("Anti-Spoofing model not found at %s", resolved_path)
+                logger.warning("Could not load Anti-Spoofing model %s: %s", resolved_path.name, e)
+
+        if "V1SE" in self.nets:
+            self.net = self.nets["V1SE"]["net"]
+            self.scale = self.nets["V1SE"]["scale"]
+        elif "V2" in self.nets:
+            self.net = self.nets["V2"]["net"]
+            self.scale = self.nets["V2"]["scale"]
+        self.enabled = bool(self.nets)
+        if self.enabled:
+            logger.info(
+                "🛡️ Passive Anti-Spoofing ensemble active (models=%s, threshold=%.2f)",
+                ",".join(sorted(self.nets)), self.threshold
+            )
 
     def reset(self):
         """Reset temporal state when face leaves camera view."""
@@ -119,18 +145,32 @@ class AntiSpoofDetector:
             and self._ema_score >= self._spoof_release_ema_threshold
         )
 
-    def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
+    def _crop_face(self, image: np.ndarray, bbox_xyxy: list, scale: float) -> np.ndarray:
         src_h, src_w = image.shape[:2]
         x1, y1, x2, y2 = bbox_xyxy
         w = max(1, x2 - x1)
         h = max(1, y2 - y1)
         bbox_xywh = [x1, y1, w, h]
 
-        left_x, top_y, right_x, bottom_y = _get_new_box(src_w, src_h, bbox_xywh, self.scale)
+        left_x, top_y, right_x, bottom_y = _get_new_box(src_w, src_h, bbox_xywh, scale)
         cropped = image[top_y:bottom_y + 1, left_x:right_x + 1]
         if cropped.size == 0:
             return np.zeros((80, 80, 3), dtype=np.uint8)
         return cv2.resize(cropped, (80, 80))
+
+    def _predict_real_score(self, net, face_crop: np.ndarray) -> float:
+        blob = cv2.dnn.blobFromImage(
+            face_crop,
+            scalefactor=1.0,
+            size=(80, 80),
+            mean=(104.0, 117.0, 123.0),
+            swapRB=False,
+        )
+        net.setInput(blob)
+        logits = net.forward()
+        exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+        probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+        return float(probs[0, 1])
 
     def update_state(self) -> str:
         if self._state == "SPOOF":
@@ -177,21 +217,18 @@ class AntiSpoofDetector:
         try:
             # Convert RGB camera frame to BGR for MiniFASNet
             img_bgr = cv2.cvtColor(frame_bgr_or_rgb, cv2.COLOR_RGB2BGR)
-            face_crop = self._crop_face(img_bgr, bbox_xyxy)
-            blob = cv2.dnn.blobFromImage(
-                face_crop,
-                scalefactor=1.0,
-                size=(80, 80),
-                mean=(104.0, 117.0, 123.0),
-                swapRB=False,
-            )
-            self.net.setInput(blob)
-            logits = self.net.forward()
-            exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
-            probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+            model_scores = []
+            for name in ("V1SE", "V2"):
+                model = self.nets.get(name)
+                if model is None:
+                    continue
+                face_crop = self._crop_face(img_bgr, bbox_xyxy, model["scale"])
+                model_scores.append(self._predict_real_score(model["net"], face_crop))
 
-            label_idx = int(np.argmax(probs))
-            raw_real_score = float(probs[0, 1])
+            if not model_scores:
+                return "REAL", 1.0
+
+            raw_real_score = float(sum(model_scores) / len(model_scores))
             self._last_raw_real_score = raw_real_score
 
             # Update EMA (40% new raw, 60% memory)
@@ -204,8 +241,7 @@ class AntiSpoofDetector:
             # SPOOF oscillation is rejected unless both the model and EMA are
             # clearly above a stricter live threshold for consecutive frames.
             is_frame_real = bool(
-                label_idx == 1
-                and raw_real_score >= self._spoof_release_real_threshold
+                raw_real_score >= self._spoof_release_real_threshold
                 and self._ema_score >= self._spoof_release_ema_threshold
             )
 

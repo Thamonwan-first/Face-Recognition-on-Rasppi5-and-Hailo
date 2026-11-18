@@ -16,6 +16,12 @@ class TestAntiSpoof(unittest.TestCase):
         detector = AntiSpoofDetector()
         self.assertTrue(detector.enabled)
         self.assertIsNotNone(detector.net)
+        self.assertGreaterEqual(len(detector.nets), 1)
+
+    def test_ensemble_loads_both_models(self):
+        detector = AntiSpoofDetector()
+        self.assertIn("V1SE", detector.nets)
+        self.assertIn("V2", detector.nets)
 
     def test_anti_spoof_fake_crop(self):
         detector = AntiSpoofDetector(threshold=0.85)
