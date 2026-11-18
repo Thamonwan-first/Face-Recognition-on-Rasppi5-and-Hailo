@@ -1,8 +1,8 @@
 """
 Silent Face Anti-Spoofing (Passive Liveness Detection)
-Uses official Multi-scale Dual Model Ensemble:
-- MiniFASNetV1SE (scale=4.0: broad contextual border)
-- MiniFASNetV2   (scale=2.7: tight face texture / screen moire / print artifact detection)
+Uses MiniFASNetV1SE with Hysteresis (Schmitt Trigger) Temporal Smoothing:
+- Prevents UI flickering between Real and Spoof
+- Blocks phone screens / paper photos without false rejections of real humans
 Runs efficiently via OpenCV DNN on CPU (~5ms per frame on Raspberry Pi 5).
 """
 from pathlib import Path
@@ -45,59 +45,68 @@ def _get_new_box(src_w, src_h, bbox, scale):
 
 class AntiSpoofDetector:
     """
-    Dual-Model Ensemble Passive Liveness Detection.
-    Class 0: Print Attack (Paper photo)
-    Class 1: Live / Real Human
-    Class 2: Replay Attack (Phone screen, tablet, monitor, video)
+    MiniFASNetV1SE with Hysteresis State Machine:
+    - High threshold: 0.55 (Promotes to REAL after 2 sustained frames)
+    - Low threshold:  0.35 (Demotes to SPOOF after 3 sustained frames)
+    Eliminates boundary jitter and prevents screen flickering.
     """
-    def __init__(self, model_path: str = None, threshold: float = 0.50):
+    def __init__(self, model_path: str = None, threshold: float = 0.55):
+        self.high_thresh = threshold
+        self.low_thresh = max(0.20, threshold - 0.20)
         self.threshold = threshold
-        self.models = []  # list of (net, scale, filename)
+        self.net = None
+        self.scale = 4.0
         self.enabled = False
+
+        # Hysteresis state tracking
+        self.state = "EVALUATING"
         self._ema_score = 0.5
-        self._consecutive_real = 0
-        self._consecutive_fake = 0
+        self._real_streak = 0
+        self._fake_streak = 0
 
         models_dir = Path(__file__).resolve().parent / "models"
+        resolved_path = models_dir / "MiniFASNetV1SE.onnx"
+        if not resolved_path.is_file():
+            resolved_path = models_dir / "MiniFASNetV2.onnx"
 
-        # Always load both models for official Silent-Face-Anti-Spoofing ensemble:
-        # MiniFASNetV1SE (scale 4.0, broad context) + MiniFASNetV2 (scale 2.7, tight screen/moire context)
-        candidates = [
-            (models_dir / "MiniFASNetV1SE.onnx", 4.0),
-            (models_dir / "MiniFASNetV2.onnx", 2.7),
-        ]
+        if model_path:
+            mp = Path(model_path)
+            if not mp.is_absolute():
+                mp = (Path(__file__).resolve().parent / model_path).resolve()
+            if mp.is_file():
+                resolved_path = mp
 
-        for p, s in candidates:
-            if p.is_file():
-                try:
-                    net = cv2.dnn.readNetFromONNX(str(p))
-                    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-                    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-                    self.models.append((net, s, p.name))
-                except Exception as e:
-                    logger.warning("Could not load Anti-Spoofing model %s: %s", p.name, e)
-
-        if self.models:
-            self.enabled = True
-            names = ", ".join([f"{m[2]}(scale={m[1]})" for m in self.models])
-            logger.info("🛡️ Passive Anti-Spoofing Dual Ensemble active: [%s] (threshold=%.2f)", names, self.threshold)
+        if resolved_path.is_file():
+            try:
+                self.net = cv2.dnn.readNetFromONNX(str(resolved_path))
+                self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+                self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+                self.enabled = True
+                self.scale = 4.0 if "V1SE" in resolved_path.name else 2.7
+                logger.info(
+                    "🛡️ Passive Anti-Spoofing active using %s (scale=%.1f, high=%.2f, low=%.2f)",
+                    resolved_path.name, self.scale, self.high_thresh, self.low_thresh
+                )
+            except Exception as e:
+                logger.warning("Could not load Anti-Spoofing model: %s", e)
         else:
-            logger.warning("⚠️ No Anti-Spoofing models found in %s", models_dir)
+            logger.warning("Anti-Spoofing model not found at %s", resolved_path)
 
     def reset(self):
         """Reset temporal state when face leaves camera view."""
+        self.state = "EVALUATING"
         self._ema_score = 0.5
-        self._consecutive_real = 0
-        self._consecutive_fake = 0
+        self._real_streak = 0
+        self._fake_streak = 0
 
-    def _crop_face(self, image: np.ndarray, bbox_xyxy: list, scale: float) -> np.ndarray:
+    def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         src_h, src_w = image.shape[:2]
         x1, y1, x2, y2 = bbox_xyxy
         w = max(1, x2 - x1)
         h = max(1, y2 - y1)
         bbox_xywh = [x1, y1, w, h]
 
-        left_x, top_y, right_x, bottom_y = _get_new_box(src_w, src_h, bbox_xywh, scale)
+        left_x, top_y, right_x, bottom_y = _get_new_box(src_w, src_h, bbox_xywh, self.scale)
         cropped = image[top_y:bottom_y + 1, left_x:right_x + 1]
         if cropped.size == 0:
             return np.zeros((80, 80, 3), dtype=np.uint8)
@@ -105,60 +114,61 @@ class AntiSpoofDetector:
 
     def check_liveness(self, frame_bgr_or_rgb: np.ndarray, bbox_xyxy: list) -> tuple[str, float]:
         """
-        Predict if face is real or fake using Dual-Model Ensemble and temporal filtering.
+        Predict if face is real or fake using Hysteresis filter.
         Returns:
             (status: str, confidence: float)
             status is one of: 'REAL', 'SPOOF', 'EVALUATING'
         """
-        if not self.enabled or not self.models:
+        if not self.enabled or self.net is None:
             return "REAL", 1.0
 
         try:
-            # Convert RGB camera frame to BGR for MiniFASNet models
+            # Convert RGB camera frame to BGR for MiniFASNet
             img_bgr = cv2.cvtColor(frame_bgr_or_rgb, cv2.COLOR_RGB2BGR)
+            face_crop = self._crop_face(img_bgr, bbox_xyxy)
+            blob = cv2.dnn.blobFromImage(
+                face_crop,
+                scalefactor=1.0,
+                size=(80, 80),
+                mean=(104.0, 117.0, 123.0),
+                swapRB=False,
+            )
+            self.net.setInput(blob)
+            logits = self.net.forward()
+            exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+            probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
 
-            preds = []
-            for net, scale, _ in self.models:
-                face_crop = self._crop_face(img_bgr, bbox_xyxy, scale)
-                # MiniFASNet Caffe preprocessing: BGR mean subtraction (104, 117, 123)
-                blob = cv2.dnn.blobFromImage(
-                    face_crop,
-                    scalefactor=1.0,
-                    size=(80, 80),
-                    mean=(104.0, 117.0, 123.0),
-                    swapRB=False,
-                )
-                net.setInput(blob)
-                logits = net.forward()
-                exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
-                probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
-                preds.append(probs[0])
-
-            # Average ensemble prediction across all loaded models
-            p_ens = np.mean(preds, axis=0)
-            label_idx = int(np.argmax(p_ens))
-            raw_real_score = float(p_ens[1])
+            label_idx = int(np.argmax(probs))
+            raw_real_score = float(probs[0, 1])
 
             # Update Exponential Moving Average (EMA)
             self._ema_score = 0.5 * raw_real_score + 0.5 * self._ema_score
 
-            # Confirmed Real: Class 1 (Live) must dominate, and score must exceed threshold
-            is_frame_real = bool(label_idx == 1 and raw_real_score >= self.threshold)
-
-            if is_frame_real:
-                self._consecutive_real += 1
-                self._consecutive_fake = 0
+            # Hysteresis state machine:
+            if self.state == "REAL":
+                # Once confirmed real, only degrade to spoof if sustained low (< low_thresh for 3 frames)
+                if self._ema_score < self.low_thresh:
+                    self._fake_streak += 1
+                    if self._fake_streak >= 3:
+                        self.state = "SPOOF"
+                        self._real_streak = 0
+                else:
+                    self._fake_streak = 0
             else:
-                self._consecutive_fake += 1
-                self._consecutive_real = 0
+                # Currently SPOOF or EVALUATING: only promote to REAL if sustained high (>= high_thresh for 2 frames)
+                if self._ema_score >= self.high_thresh and label_idx == 1:
+                    self._real_streak += 1
+                    if self._real_streak >= 2:
+                        self.state = "REAL"
+                        self._fake_streak = 0
+                else:
+                    self._real_streak = 0
+                    if self._ema_score < self.low_thresh:
+                        self._fake_streak += 1
+                        if self._fake_streak >= 2:
+                            self.state = "SPOOF"
 
-            # State evaluation:
-            if self._consecutive_real >= 2:
-                return "REAL", float(self._ema_score)
-            elif self._consecutive_fake >= 2:
-                return "SPOOF", float(self._ema_score)
-            else:
-                return "EVALUATING", float(self._ema_score)
+            return self.state, float(self._ema_score)
 
         except Exception as e:
             logger.debug("Liveness check error: %s", e)
