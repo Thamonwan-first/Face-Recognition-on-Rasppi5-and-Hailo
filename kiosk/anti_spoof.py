@@ -61,16 +61,15 @@ class AntiSpoofDetector:
         self._fake_streak = 0
 
         models_dir = Path(__file__).resolve().parent / "models"
-        resolved_path = models_dir / "MiniFASNetV1SE.onnx"
-        if not resolved_path.is_file():
-            resolved_path = models_dir / "MiniFASNetV2.onnx"
-
         if model_path:
             mp = Path(model_path)
             if not mp.is_absolute():
                 mp = (Path(__file__).resolve().parent / model_path).resolve()
-            if mp.is_file():
-                resolved_path = mp
+            resolved_path = mp if mp.is_file() else mp
+        else:
+            resolved_path = models_dir / "MiniFASNetV1SE.onnx"
+            if not resolved_path.is_file():
+                resolved_path = models_dir / "MiniFASNetV2.onnx"
 
         if resolved_path.is_file():
             try:
@@ -157,8 +156,9 @@ class AntiSpoofDetector:
             # 1. REAL requires at least 6 consecutive real frames (~200ms sustained)
             if self._real_streak >= 6:
                 return "REAL", float(self._ema_score)
-            # 2. SPOOF triggers when fake frames accumulate or score is very low
-            elif self._fake_streak >= 3 or self._ema_score < (self.threshold - 0.20):
+            # 2. SPOOF requires sustained evidence. This avoids switching a real
+            # face to SPOOF because of one or two low-scoring camera frames.
+            elif self._fake_streak >= 8 or self._ema_score < (self.threshold - 0.25):
                 return "SPOOF", float(self._ema_score)
             else:
                 return "EVALUATING", float(self._ema_score)

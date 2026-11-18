@@ -20,8 +20,8 @@ class TestAntiSpoof(unittest.TestCase):
         detector = AntiSpoofDetector(threshold=0.85)
         dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
         bbox = [100, 100, 250, 250]
-        is_real, score = detector.check_liveness(dummy_frame, bbox)
-        self.assertFalse(is_real)
+        status, score = detector.check_liveness(dummy_frame, bbox)
+        self.assertIn(status, ("SPOOF", "EVALUATING"))
         self.assertTrue(0.0 <= score <= 1.0)
 
     def test_anti_spoof_disabled_fallback(self):
