@@ -48,7 +48,7 @@ class Camera:
             try:
                 self._picam = Picamera2()
                 config = self._picam.create_preview_configuration(
-                    main={"size": (self.width, self.height), "format": "RGB888"},
+                    main={"size": (self.width, self.height), "format": "BGR888"},
                 )
                 self._picam.configure(config)
                 self._picam.start()
@@ -108,8 +108,9 @@ class Camera:
         if self._backend == "picamera2":
             try:
                 raw = self._picam.capture_array()
-                # RGB888 from create_preview_configuration is already RGB.
-                frame = np.ascontiguousarray(raw)
+                # BGR888 is deterministic for OpenCV/Picamera2; convert once to RGB
+                # for the detector, liveness model, and RGB UI pipeline.
+                frame = cv2.cvtColor(np.ascontiguousarray(raw), cv2.COLOR_BGR2RGB)
             except Exception as e:
                 logger.warning("Picamera2 capture error: %s", e)
                 return None
