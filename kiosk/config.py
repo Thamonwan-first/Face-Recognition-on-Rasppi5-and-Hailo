@@ -81,7 +81,7 @@ class KioskConfig:
         return f"{self.server_url.rstrip('/')}/{endpoint.lstrip('/')}"
 
     recognition_threshold: float = float(_RAW.get("recognition", {}).get("threshold", os.getenv("RECOGNITION_THRESHOLD", 0.52)))
-    debounce_seconds: int = int(_RAW.get("recognition", {}).get("debounce_seconds", 30))
+    debounce_seconds: int = int(_RAW.get("recognition", {}).get("debounce_seconds", 15))
     min_enroll_images: int = int(_RAW.get("recognition", {}).get("min_enroll_images", 3))
     max_enroll_images: int = int(_RAW.get("recognition", {}).get("max_enroll_images", 5))
 

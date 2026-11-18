@@ -228,6 +228,7 @@ class RecognitionWorker(QThread):
                                     notes="",
                                 )
                                 if rec:
+                                    logger.info("✅ บันทึกเวลาสำเร็จ: %s (%s) [%s] (ความมั่นใจ: %.2f)", name, emp_id, rec["direction"], conf)
                                     self._recent_scans[user_id] = now
                                     # Bound memory: purge stale entries older than 2x debounce window
                                     if len(self._recent_scans) > 50:
@@ -239,6 +240,13 @@ class RecognitionWorker(QThread):
                                             self.on_attendance_recorded()
                                         except Exception as cb_err:
                                             logger.debug("on_attendance_recorded failed: %s", cb_err)
+                        else:
+                            # Debounced: user was already recorded within debounce_seconds
+                            now_t = time.time()
+                            if now_t - getattr(self, f'_last_debounced_log_{user_id}', 0) >= 3.0:
+                                setattr(self, f'_last_debounced_log_{user_id}', now_t)
+                                remaining = int(self.config.debounce_seconds - (now - last_scan))
+                                logger.info("⏳ พนักงาน %s เพิ่งบันทึกเวลาไปแล้ว (ระบบป้องกันการสแกนซ้ำ อีก %d วินาที)", name, max(0, remaining))
                     else:
                         now = time.time()
                         if not hasattr(self, '_unknown_face_start') or self._unknown_face_start is None:

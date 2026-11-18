@@ -14,7 +14,7 @@ server:
 
 recognition:
   threshold: 0.52          # Cosine similarity threshold (0.50 - 0.60)
-  debounce_seconds: 30     # Prevent duplicate scans within N seconds
+  debounce_seconds: 15     # Prevent duplicate scans within N seconds (15s for responsive kiosk)
   min_enroll_images: 3     # Minimum photos needed for face registration
   max_enroll_images: 5     # Maximum photos
   anti_spoof_enabled: true # เปิดใช้งาน AI ตรวจสอบคนจริง ป้องกันรูปถ่าย/จอมือถือ

@@ -60,19 +60,12 @@ class AntiSpoofDetector:
 
         models_dir = Path(__file__).resolve().parent / "models"
 
+        # Always load both models for official Silent-Face-Anti-Spoofing ensemble:
+        # MiniFASNetV1SE (scale 4.0, broad context) + MiniFASNetV2 (scale 2.7, tight screen/moire context)
         candidates = [
             (models_dir / "MiniFASNetV1SE.onnx", 4.0),
             (models_dir / "MiniFASNetV2.onnx", 2.7),
         ]
-
-        # If custom model_path was specified
-        if model_path:
-            mp = Path(model_path)
-            if not mp.is_absolute():
-                mp = (Path(__file__).resolve().parent / model_path).resolve()
-            if mp.is_file():
-                s = 4.0 if "V1SE" in mp.name else 2.7
-                candidates = [(mp, s)]
 
         for p, s in candidates:
             if p.is_file():
