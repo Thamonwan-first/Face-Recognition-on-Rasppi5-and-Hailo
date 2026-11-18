@@ -21,6 +21,9 @@ class AntiSpoofDetector:
         self.threshold = threshold
         self.net = None
         self.enabled = False
+        self._ema_score = 0.5
+        self._consecutive_real = 0
+        self._consecutive_fake = 0
 
         if model_path is None:
             model_path = Path(__file__).resolve().parent / "models" / "MiniFASNetV1SE.onnx"
@@ -106,11 +109,17 @@ class AntiSpoofDetector:
             return np.zeros((80, 80, 3), dtype=np.uint8)
         return cv2.resize(cropped, (80, 80))
 
+    def reset(self):
+        """Reset temporal state when face leaves camera view."""
+        self._ema_score = 0.5
+        self._consecutive_real = 0
+        self._consecutive_fake = 0
+
     def check_liveness(self, frame_bgr_or_rgb: np.ndarray, bbox_xyxy: list) -> tuple[bool, float]:
         """
-        Predict if face is real or fake.
+        Predict if face is real or fake using temporal smoothing (EMA + consecutive streak filter).
         Returns:
-            (is_real: bool, confidence: float)
+            (is_real: bool, smoothed_confidence: float)
         """
         if not self.enabled or self.net is None:
             return True, 1.0
@@ -135,11 +144,26 @@ class AntiSpoofDetector:
             probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
 
             label_idx = int(np.argmax(probs))
-            real_score = float(probs[0, 1])
+            raw_real_score = float(probs[0, 1])
 
-            # Class 1 is Real Live person
-            is_real = bool(label_idx == 1 and real_score >= self.threshold)
-            return is_real, real_score
+            # Update EMA (Exponential Moving Average)
+            self._ema_score = 0.5 * raw_real_score + 0.5 * self._ema_score
+
+            # Single-frame decision:
+            is_frame_real = bool(label_idx == 1 and raw_real_score >= self.threshold)
+
+            # Streak tracking: allow real streak to continue through slight frame jitter if EMA is healthy
+            if is_frame_real or (self._consecutive_real >= 2 and raw_real_score >= 0.35 and self._ema_score >= self.threshold):
+                self._consecutive_real += 1
+                self._consecutive_fake = 0
+            else:
+                self._consecutive_fake += 1
+                self._consecutive_real = 0
+
+            # Must have at least 2 consecutive real frames AND EMA at or above threshold
+            # (Prevents single-frame reflections from phones, and prevents single-frame dips from rejecting real people)
+            is_real = bool(self._consecutive_real >= 2 and self._ema_score >= (self.threshold - 0.05))
+            return is_real, float(self._ema_score)
         except Exception as e:
             logger.debug("Liveness check error: %s", e)
             return True, 1.0

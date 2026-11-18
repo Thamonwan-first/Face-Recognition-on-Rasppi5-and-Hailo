@@ -139,8 +139,17 @@ class RecognitionWorker(QThread):
                     if self.anti_spoof and self.anti_spoof.enabled:
                         is_real, spoof_score = self.anti_spoof.check_liveness(frame_rgb, [x1, y1, x2, y2])
                         if not is_real:
+                            # Reset unknown face accumulation so phone screens never trigger upload to dashboard
+                            self._unknown_face_start = None
+
                             self.spoof_detected.emit()
-                            logger.info("🛡️ ตรวจพบ Anti-Spoof รูปถ่าย/หน้าจอ (ความมั่นใจคนจริงต่ำ: %.2f)", spoof_score)
+
+                            # Rate-limit log output so terminal is not flooded
+                            now_t = time.time()
+                            if now_t - getattr(self, '_last_spoof_log', 0) >= 1.5:
+                                self._last_spoof_log = now_t
+                                logger.info("🛡️ ตรวจพบ Anti-Spoof รูปถ่าย/หน้าจอ (ความมั่นใจคนจริง: %.2f / เกณฑ์: %.2f)", spoof_score, self.anti_spoof.threshold)
+
                             # วาดกรอบสีส้ม-แดงแจ้งเตือนว่าเป็นภาพปลอม และข้ามการบันทึกเวลา
                             draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 69, 0), thickness=2)
                             cv2.putText(annotated, "Spoof Detected", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 69, 0), 2)
@@ -255,6 +264,8 @@ class RecognitionWorker(QThread):
 
                 if not faces:
                     self._unknown_face_start = None
+                    if self.anti_spoof:
+                        self.anti_spoof.reset()
 
                 h, w, ch = annotated.shape
                 qimg = QImage(annotated.data, w, h, ch * w, QImage.Format_RGB888).copy()
