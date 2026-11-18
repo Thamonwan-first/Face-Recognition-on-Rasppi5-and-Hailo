@@ -3,6 +3,7 @@ Unit tests for MiniFASNet Passive Anti-Spoofing Detector.
 """
 import unittest
 import sys
+import time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -39,6 +40,18 @@ class TestAntiSpoof(unittest.TestCase):
         detector.reset()
         self.assertEqual(detector._state, "EVALUATING")
         self.assertEqual(detector._fake_streak, 0)
+
+    def test_spoof_state_requires_sustained_real_frames_to_release(self):
+        detector = AntiSpoofDetector(threshold=0.60)
+        detector._state = "SPOOF"
+        detector._spoof_entered_at = 0.0
+        detector._real_streak = 29
+        detector._spoof_hold_seconds = 1.5
+        self.assertEqual(detector.update_state(), "SPOOF")
+
+        detector._spoof_entered_at = time.monotonic() - 2.0
+        detector._real_streak = 30
+        self.assertEqual(detector.update_state(), "REAL")
 
 
 if __name__ == "__main__":

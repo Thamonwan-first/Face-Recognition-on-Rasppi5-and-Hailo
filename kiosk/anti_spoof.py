@@ -8,6 +8,7 @@ Runs efficiently via OpenCV DNN on CPU (~5ms per frame on Raspberry Pi 5).
 """
 from pathlib import Path
 import logging
+import time
 import cv2
 import numpy as np
 
@@ -60,6 +61,9 @@ class AntiSpoofDetector:
         self._real_streak = 0
         self._fake_streak = 0
         self._state = "EVALUATING"
+        self._spoof_entered_at = 0.0
+        self._spoof_hold_seconds = 1.5
+        self._spoof_release_real_frames = 30
 
         models_dir = Path(__file__).resolve().parent / "models"
         if model_path:
@@ -94,6 +98,7 @@ class AntiSpoofDetector:
         self._real_streak = 0
         self._fake_streak = 0
         self._state = "EVALUATING"
+        self._spoof_entered_at = 0.0
 
     def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         src_h, src_w = image.shape[:2]
@@ -107,6 +112,27 @@ class AntiSpoofDetector:
         if cropped.size == 0:
             return np.zeros((80, 80, 3), dtype=np.uint8)
         return cv2.resize(cropped, (80, 80))
+
+    def update_state(self) -> str:
+        if self._state == "SPOOF":
+            held_long_enough = (
+                time.monotonic() - self._spoof_entered_at
+                >= self._spoof_hold_seconds
+            )
+            if held_long_enough and self._real_streak >= self._spoof_release_real_frames:
+                self._state = "REAL"
+                self._spoof_entered_at = 0.0
+        elif self._real_streak >= 6:
+            self._state = "REAL"
+        elif self._fake_streak >= 8 or (
+            self._fake_streak >= 3
+            and self._ema_score < (self.threshold - 0.35)
+        ):
+            self._state = "SPOOF"
+            self._spoof_entered_at = time.monotonic()
+        else:
+            self._state = "EVALUATING"
+        return self._state
 
     def check_liveness(self, frame_bgr_or_rgb: np.ndarray, bbox_xyxy: list) -> tuple[str, float]:
         """
@@ -155,21 +181,10 @@ class AntiSpoofDetector:
                 self._real_streak = 0
 
             # State decision with hysteresis:
-            # SPOOF stays latched until 10 consecutive real frames prove a live face.
-            # This prevents brief changes in a model score from flipping the frame white.
-            if self._state == "SPOOF":
-                if self._real_streak >= 10:
-                    self._state = "REAL"
-                else:
-                    self._state = "SPOOF"
-            elif self._real_streak >= 6:
-                self._state = "REAL"
-            elif self._fake_streak >= 5 or self._ema_score < (self.threshold - 0.25):
-                self._state = "SPOOF"
-            else:
-                self._state = "EVALUATING"
-
-            return self._state, float(self._ema_score)
+            # Once SPOOF is confirmed, keep it latched for at least 1.5 seconds
+            # and require 30 consecutive real frames before releasing it.
+            state = self.update_state()
+            return state, float(self._ema_score)
 
         except Exception as e:
             logger.debug("Liveness check error: %s", e)
