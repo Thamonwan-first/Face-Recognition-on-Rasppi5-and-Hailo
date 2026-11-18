@@ -15,12 +15,12 @@ class TestAntiSpoof(unittest.TestCase):
     def test_preprocessing_is_rgb_float_chw(self):
         detector = AntiSpoofDetector()
         face = np.full((80, 80, 3), 255, dtype=np.uint8)
-        tensor = face.astype(np.float32) / 255.0
+        tensor = face.astype(np.float32)
         tensor = np.transpose(tensor, (2, 0, 1))[np.newaxis, ...]
         self.assertEqual(tensor.shape, (1, 3, 80, 80))
         self.assertEqual(tensor.dtype, np.float32)
-        self.assertEqual(float(tensor.min()), 1.0)
-        self.assertEqual(float(tensor.max()), 1.0)
+        self.assertEqual(float(tensor.min()), 255.0)
+        self.assertEqual(float(tensor.max()), 255.0)
 
     def test_ensemble_prefers_v2(self):
         detector = AntiSpoofDetector()

@@ -52,16 +52,6 @@ class Camera:
                 )
                 self._picam.configure(config)
                 self._picam.start()
-                try:
-                    self._picam.set_controls({
-                        "AfMode": 2,
-                        "AwbEnable": True,
-                        "AeEnable": True,
-                        "NoiseReductionMode": 1,
-                        "FrameDurationLimits": (33333, 33333),
-                    })
-                except Exception as control_error:
-                    logger.warning("Picamera2 liveness controls unavailable: %s", control_error)
                 self._backend = "picamera2"
                 self._is_active = True
                 logger.info(
@@ -108,9 +98,8 @@ class Camera:
         if self._backend == "picamera2":
             try:
                 raw = self._picam.capture_array()
-                # RGB888 is already in standard RGB format for detectors,
-                # MiniFASNet, and QImage.Format_RGB888. Do not swap channels.
-                frame = np.ascontiguousarray(raw)
+                # Picamera2 libcamera memory is BGR; convert to RGB for accurate skin tones
+                frame = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
             except Exception as e:
                 logger.warning("Picamera2 capture error: %s", e)
                 return None

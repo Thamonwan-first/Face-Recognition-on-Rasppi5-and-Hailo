@@ -161,8 +161,8 @@ class AntiSpoofDetector:
 
     def _predict_real_score(self, net, face_crop: np.ndarray) -> float:
         # Silent-Face-Anti-Spoofing crops are RGB uint8 frames.
-        # The PyTorch ToTensor preprocessing converts them to CHW float32 in [0, 1].
-        tensor = face_crop.astype(np.float32) / 255.0
+        # The model expects CHW float32 with raw pixel values in range [0.0, 255.0] (no division by 255).
+        tensor = face_crop.astype(np.float32)
         tensor = np.transpose(tensor, (2, 0, 1))[np.newaxis, ...]
         tensor = np.ascontiguousarray(tensor)
         blob = tensor
