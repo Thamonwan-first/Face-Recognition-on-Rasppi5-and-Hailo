@@ -135,10 +135,10 @@ class RecognitionWorker(QThread):
                     x1, y1, x2, y2 = f["bbox"]
                     landmarks = f.get("landmarks", [])
 
-                    # 1. Passive Anti-Spoofing Check (MiniFASNetV1SE)
+                    # 1. Passive Anti-Spoofing Check (Dual Ensemble)
                     if self.anti_spoof and self.anti_spoof.enabled:
-                        is_real, spoof_score = self.anti_spoof.check_liveness(frame_rgb, [x1, y1, x2, y2])
-                        if not is_real:
+                        liveness_status, spoof_score = self.anti_spoof.check_liveness(frame_rgb, [x1, y1, x2, y2])
+                        if liveness_status == "SPOOF":
                             # Reset unknown face accumulation so phone screens never trigger upload to dashboard
                             self._unknown_face_start = None
 
@@ -153,6 +153,10 @@ class RecognitionWorker(QThread):
                             # วาดกรอบสีส้ม-แดงแจ้งเตือนว่าเป็นภาพปลอม และข้ามการบันทึกเวลา
                             draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 69, 0), thickness=2)
                             cv2.putText(annotated, "Spoof Detected", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 69, 0), 2)
+                            continue
+                        elif liveness_status == "EVALUATING":
+                            # Multi-frame warmup: draw clean white brackets and continue evaluating (takes ~30-60ms)
+                            draw_corner_brackets(annotated, x1, y1, x2, y2, color=(255, 255, 255), thickness=1)
                             continue
                     else:
                         if not getattr(self, '_anti_spoof_warned', False):
