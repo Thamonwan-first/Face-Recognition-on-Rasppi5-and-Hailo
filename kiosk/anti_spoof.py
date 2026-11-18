@@ -1,8 +1,8 @@
 """
 Silent Face Anti-Spoofing (Passive Liveness Detection)
 Uses MiniFASNetV1SE with Multi-Frame Sustained Verification:
-- Requires 6 consecutive frames (~200ms) of sustained high liveness to qualify as REAL
-- Latches SPOOF after sustained evidence and requires sustained real frames to release
+- Requires sustained high liveness to qualify as REAL
+- Latches SPOOF after sustained evidence and requires a long stable live streak to release
 - Blocks smartphone screens, tablets, and photos with 100% stability
 Runs efficiently via OpenCV DNN on CPU (~5ms per frame on Raspberry Pi 5).
 """
@@ -48,7 +48,7 @@ def _get_new_box(src_w, src_h, bbox, scale):
 class AntiSpoofDetector:
     """
     MiniFASNetV1SE with Sustained Verification Filter:
-    - Real person: Must sustain score >= threshold for 6 frames (200ms)
+    - Real person: Must sustain a strong score for a long consecutive streak
     - Phone / Fake: Requires sustained low scores and remains SPOOF with hysteresis
     """
     def __init__(self, model_path: str = None, threshold: float = 0.60):
@@ -62,8 +62,10 @@ class AntiSpoofDetector:
         self._fake_streak = 0
         self._state = "EVALUATING"
         self._spoof_entered_at = 0.0
-        self._spoof_hold_seconds = 1.5
-        self._spoof_release_real_frames = 30
+        self._spoof_hold_seconds = 3.0
+        self._spoof_release_real_frames = 90
+        self._spoof_release_real_threshold = 0.70
+        self._spoof_release_ema_threshold = 0.65
 
         models_dir = Path(__file__).resolve().parent / "models"
         if model_path:
@@ -122,7 +124,9 @@ class AntiSpoofDetector:
             if held_long_enough and self._real_streak >= self._spoof_release_real_frames:
                 self._state = "REAL"
                 self._spoof_entered_at = 0.0
-        elif self._real_streak >= 6:
+        elif self._real_streak >= 6 and (
+            self._ema_score >= self._spoof_release_ema_threshold
+        ):
             self._state = "REAL"
         elif self._fake_streak >= 8 or (
             self._fake_streak >= 3
@@ -170,8 +174,13 @@ class AntiSpoofDetector:
                 self._ema_score = 0.4 * raw_real_score + 0.6 * self._ema_score
 
             # Single-frame criteria:
-            # Must be classified as Class 1 (Live) AND raw score >= threshold AND EMA >= threshold - 0.05
-            is_frame_real = bool(label_idx == 1 and raw_real_score >= self.threshold and self._ema_score >= (self.threshold - 0.05))
+            # SPOOF oscillation is rejected unless both the model and EMA are
+            # clearly above a stricter live threshold for consecutive frames.
+            is_frame_real = bool(
+                label_idx == 1
+                and raw_real_score >= self._spoof_release_real_threshold
+                and self._ema_score >= self._spoof_release_ema_threshold
+            )
 
             if is_frame_real:
                 self._real_streak += 1
