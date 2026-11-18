@@ -66,6 +66,8 @@ class AntiSpoofDetector:
         self._spoof_release_real_frames = 90
         self._spoof_release_real_threshold = 0.70
         self._spoof_release_ema_threshold = 0.65
+        self._real_to_spoof_frames = 2
+        self._last_raw_real_score = 1.0
 
         models_dir = Path(__file__).resolve().parent / "models"
         if model_path:
@@ -101,6 +103,7 @@ class AntiSpoofDetector:
         self._fake_streak = 0
         self._state = "EVALUATING"
         self._spoof_entered_at = 0.0
+        self._last_raw_real_score = 1.0
 
     def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         src_h, src_w = image.shape[:2]
@@ -124,6 +127,14 @@ class AntiSpoofDetector:
             if held_long_enough and self._real_streak >= self._spoof_release_real_frames:
                 self._state = "REAL"
                 self._spoof_entered_at = 0.0
+        elif self._state == "REAL":
+            if (
+                self._fake_streak >= self._real_to_spoof_frames
+                and self._last_raw_real_score < self.threshold
+                and self._ema_score < self._spoof_release_ema_threshold
+            ):
+                self._state = "SPOOF"
+                self._spoof_entered_at = time.monotonic()
         elif self._real_streak >= 6 and (
             self._ema_score >= self._spoof_release_ema_threshold
         ):
@@ -166,6 +177,7 @@ class AntiSpoofDetector:
 
             label_idx = int(np.argmax(probs))
             raw_real_score = float(probs[0, 1])
+            self._last_raw_real_score = raw_real_score
 
             # Update EMA (40% new raw, 60% memory)
             if self._ema_score == 0.0:

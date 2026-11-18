@@ -53,6 +53,14 @@ class TestAntiSpoof(unittest.TestCase):
         detector._real_streak = 90
         self.assertEqual(detector.update_state(), "REAL")
 
+    def test_real_state_returns_to_spoof_quickly(self):
+        detector = AntiSpoofDetector(threshold=0.60)
+        detector._state = "REAL"
+        detector._fake_streak = 2
+        detector._last_raw_real_score = 0.05
+        detector._ema_score = 0.20
+        self.assertEqual(detector.update_state(), "SPOOF")
+
 
 if __name__ == "__main__":
     unittest.main()
