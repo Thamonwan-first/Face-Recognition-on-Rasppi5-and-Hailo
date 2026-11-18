@@ -52,6 +52,15 @@ class Camera:
                 )
                 self._picam.configure(config)
                 self._picam.start()
+                try:
+                    self._picam.set_controls({
+                        "AfMode": 2,
+                        "AwbEnable": True,
+                        "AeEnable": True,
+                        "NoiseReductionMode": 3,
+                    })
+                except Exception as control_error:
+                    logger.warning("Picamera2 liveness controls unavailable: %s", control_error)
                 self._backend = "picamera2"
                 self._is_active = True
                 logger.info(
@@ -98,8 +107,8 @@ class Camera:
         if self._backend == "picamera2":
             try:
                 raw = self._picam.capture_array()
-                # Picamera2 libcamera memory is BGR; convert to RGB for accurate skin tones
-                frame = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
+                # RGB888 from create_preview_configuration is already RGB.
+                frame = np.ascontiguousarray(raw)
             except Exception as e:
                 logger.warning("Picamera2 capture error: %s", e)
                 return None

@@ -89,7 +89,7 @@ class KioskConfig:
     embedding_model: str = _RAW.get("models", {}).get("embedding_model", "models/arcface_mobilefacenet.hef")
     anti_spoof_model: str = _RAW.get("models", {}).get("anti_spoof_model", "models/MiniFASNetV1SE.onnx")
     anti_spoof_enabled: bool = bool(_RAW.get("recognition", {}).get("anti_spoof_enabled", True))
-    anti_spoof_threshold: float = float(_RAW.get("recognition", {}).get("anti_spoof_threshold", 0.85))
+    anti_spoof_threshold: float = float(_RAW.get("recognition", {}).get("anti_spoof_threshold", 0.60))
 
     camera_width: int = int(_RAW.get("camera", {}).get("width", 640))
     camera_height: int = int(_RAW.get("camera", {}).get("height", 480))

@@ -51,7 +51,7 @@ class AntiSpoofDetector:
     - Real person: Must sustain a strong score for a long consecutive streak
     - Phone / Fake: Requires sustained low scores and remains SPOOF with hysteresis
     """
-    def __init__(self, model_path: str = None, threshold: float = 0.85):
+    def __init__(self, model_path: str = None, threshold: float = 0.60):
         self.threshold = threshold
         self.net = None
         self.nets = {}
@@ -66,8 +66,8 @@ class AntiSpoofDetector:
         self._spoof_entered_at = 0.0
         self._spoof_hold_seconds = 3.0
         self._spoof_release_real_frames = 90
-        self._spoof_release_real_threshold = max(threshold, 0.85)
-        self._spoof_release_ema_threshold = max(threshold - 0.20, 0.65)
+        self._spoof_release_real_threshold = max(threshold, 0.60)
+        self._spoof_release_ema_threshold = max(threshold - 0.20, 0.55)
         self._real_to_spoof_frames = 2
         self._last_raw_real_score = 1.0
         self._recognition_cooldown_until = 0.0
@@ -160,13 +160,12 @@ class AntiSpoofDetector:
         return cv2.resize(cropped, (80, 80))
 
     def _predict_real_score(self, net, face_crop: np.ndarray) -> float:
-        blob = cv2.dnn.blobFromImage(
-            face_crop,
-            scalefactor=1.0,
-            size=(80, 80),
-            mean=(104.0, 117.0, 123.0),
-            swapRB=False,
-        )
+        # Silent-Face-Anti-Spoofing crops are RGB uint8 frames.
+        # The PyTorch ToTensor preprocessing converts them to CHW float32 in [0, 1].
+        tensor = face_crop.astype(np.float32) / 255.0
+        tensor = np.transpose(tensor, (2, 0, 1))[np.newaxis, ...]
+        tensor = np.ascontiguousarray(tensor)
+        blob = tensor
         net.setInput(blob)
         logits = net.forward()
         exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
@@ -216,15 +215,15 @@ class AntiSpoofDetector:
             return "REAL", 1.0
 
         try:
-            # Convert RGB camera frame to BGR for MiniFASNet
-            img_bgr = cv2.cvtColor(frame_bgr_or_rgb, cv2.COLOR_RGB2BGR)
+            # Camera.capture() returns RGB; keep the same channel order used by the ONNX training pipeline.
+            img_rgb = np.ascontiguousarray(frame_bgr_or_rgb)
             weighted_score = 0.0
             total_weight = 0.0
             for name in ("V1SE", "V2"):
                 model = self.nets.get(name)
                 if model is None:
                     continue
-                face_crop = self._crop_face(img_bgr, bbox_xyxy, model["scale"])
+                face_crop = self._crop_face(img_rgb, bbox_xyxy, model["scale"])
                 score = self._predict_real_score(model["net"], face_crop)
                 weight = self._model_weights[name]
                 weighted_score += score * weight

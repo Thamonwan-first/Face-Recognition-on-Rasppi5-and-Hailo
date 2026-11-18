@@ -84,7 +84,7 @@ class RecognitionWorker(QThread):
         # Initialize Passive Anti-Spoofing Detector (MiniFASNetV1SE)
         if getattr(config, "anti_spoof_enabled", True):
             model_p = getattr(config, "anti_spoof_model", getattr(config, "anti_spoof_model_path", None))
-            thresh = getattr(config, "anti_spoof_threshold", 0.85)
+            thresh = getattr(config, "anti_spoof_threshold", 0.60)
             self.anti_spoof = AntiSpoofDetector(model_path=model_p, threshold=thresh)
         else:
             self.anti_spoof = None
