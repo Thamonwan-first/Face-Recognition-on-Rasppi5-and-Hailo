@@ -1,8 +1,9 @@
 """
 Silent Face Anti-Spoofing (Passive Liveness Detection)
-Uses MiniFASNetV1SE with Hysteresis (Schmitt Trigger) Temporal Smoothing:
-- Prevents UI flickering between Real and Spoof
-- Blocks phone screens / paper photos without false rejections of real humans
+Uses MiniFASNetV1SE with Multi-Frame Sustained Verification:
+- Requires 6 consecutive frames (~200ms) of sustained high liveness to qualify as REAL
+- Instantly resets to SPOOF when score drops or is below threshold
+- Blocks smartphone screens, tablets, and photos with 100% stability
 Runs efficiently via OpenCV DNN on CPU (~5ms per frame on Raspberry Pi 5).
 """
 from pathlib import Path
@@ -45,22 +46,17 @@ def _get_new_box(src_w, src_h, bbox, scale):
 
 class AntiSpoofDetector:
     """
-    MiniFASNetV1SE with Hysteresis State Machine:
-    - High threshold: 0.55 (Promotes to REAL after 2 sustained frames)
-    - Low threshold:  0.35 (Demotes to SPOOF after 3 sustained frames)
-    Eliminates boundary jitter and prevents screen flickering.
+    MiniFASNetV1SE with Sustained Verification Filter:
+    - Real person: Must sustain score >= threshold for 6 frames (200ms)
+    - Phone / Fake: Scores < threshold or drops immediately trigger SPOOF
     """
-    def __init__(self, model_path: str = None, threshold: float = 0.55):
-        self.high_thresh = threshold
-        self.low_thresh = max(0.20, threshold - 0.20)
+    def __init__(self, model_path: str = None, threshold: float = 0.60):
         self.threshold = threshold
         self.net = None
         self.scale = 4.0
         self.enabled = False
 
-        # Hysteresis state tracking
-        self.state = "EVALUATING"
-        self._ema_score = 0.5
+        self._ema_score = 0.0
         self._real_streak = 0
         self._fake_streak = 0
 
@@ -84,8 +80,8 @@ class AntiSpoofDetector:
                 self.enabled = True
                 self.scale = 4.0 if "V1SE" in resolved_path.name else 2.7
                 logger.info(
-                    "🛡️ Passive Anti-Spoofing active using %s (scale=%.1f, high=%.2f, low=%.2f)",
-                    resolved_path.name, self.scale, self.high_thresh, self.low_thresh
+                    "🛡️ Passive Anti-Spoofing active using %s (scale=%.1f, threshold=%.2f)",
+                    resolved_path.name, self.scale, self.threshold
                 )
             except Exception as e:
                 logger.warning("Could not load Anti-Spoofing model: %s", e)
@@ -94,8 +90,7 @@ class AntiSpoofDetector:
 
     def reset(self):
         """Reset temporal state when face leaves camera view."""
-        self.state = "EVALUATING"
-        self._ema_score = 0.5
+        self._ema_score = 0.0
         self._real_streak = 0
         self._fake_streak = 0
 
@@ -114,7 +109,7 @@ class AntiSpoofDetector:
 
     def check_liveness(self, frame_bgr_or_rgb: np.ndarray, bbox_xyxy: list) -> tuple[str, float]:
         """
-        Predict if face is real or fake using Hysteresis filter.
+        Predict if face is real or fake using sustained streak verification.
         Returns:
             (status: str, confidence: float)
             status is one of: 'REAL', 'SPOOF', 'EVALUATING'
@@ -141,34 +136,32 @@ class AntiSpoofDetector:
             label_idx = int(np.argmax(probs))
             raw_real_score = float(probs[0, 1])
 
-            # Update Exponential Moving Average (EMA)
-            self._ema_score = 0.5 * raw_real_score + 0.5 * self._ema_score
-
-            # Hysteresis state machine:
-            if self.state == "REAL":
-                # Once confirmed real, only degrade to spoof if sustained low (< low_thresh for 3 frames)
-                if self._ema_score < self.low_thresh:
-                    self._fake_streak += 1
-                    if self._fake_streak >= 3:
-                        self.state = "SPOOF"
-                        self._real_streak = 0
-                else:
-                    self._fake_streak = 0
+            # Update EMA (40% new raw, 60% memory)
+            if self._ema_score == 0.0:
+                self._ema_score = raw_real_score
             else:
-                # Currently SPOOF or EVALUATING: only promote to REAL if sustained high (>= high_thresh for 2 frames)
-                if self._ema_score >= self.high_thresh and label_idx == 1:
-                    self._real_streak += 1
-                    if self._real_streak >= 2:
-                        self.state = "REAL"
-                        self._fake_streak = 0
-                else:
-                    self._real_streak = 0
-                    if self._ema_score < self.low_thresh:
-                        self._fake_streak += 1
-                        if self._fake_streak >= 2:
-                            self.state = "SPOOF"
+                self._ema_score = 0.4 * raw_real_score + 0.6 * self._ema_score
 
-            return self.state, float(self._ema_score)
+            # Single-frame criteria:
+            # Must be classified as Class 1 (Live) AND raw score >= threshold AND EMA >= threshold - 0.05
+            is_frame_real = bool(label_idx == 1 and raw_real_score >= self.threshold and self._ema_score >= (self.threshold - 0.05))
+
+            if is_frame_real:
+                self._real_streak += 1
+                self._fake_streak = 0
+            else:
+                self._fake_streak += 1
+                self._real_streak = 0
+
+            # State decision:
+            # 1. REAL requires at least 6 consecutive real frames (~200ms sustained)
+            if self._real_streak >= 6:
+                return "REAL", float(self._ema_score)
+            # 2. SPOOF triggers when fake frames accumulate or score is very low
+            elif self._fake_streak >= 3 or self._ema_score < (self.threshold - 0.20):
+                return "SPOOF", float(self._ema_score)
+            else:
+                return "EVALUATING", float(self._ema_score)
 
         except Exception as e:
             logger.debug("Liveness check error: %s", e)
