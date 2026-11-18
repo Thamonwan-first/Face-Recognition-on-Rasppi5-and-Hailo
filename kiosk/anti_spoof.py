@@ -2,7 +2,7 @@
 Silent Face Anti-Spoofing (Passive Liveness Detection)
 Uses MiniFASNetV1SE with Multi-Frame Sustained Verification:
 - Requires 6 consecutive frames (~200ms) of sustained high liveness to qualify as REAL
-- Instantly resets to SPOOF when score drops or is below threshold
+- Latches SPOOF after sustained evidence and requires sustained real frames to release
 - Blocks smartphone screens, tablets, and photos with 100% stability
 Runs efficiently via OpenCV DNN on CPU (~5ms per frame on Raspberry Pi 5).
 """
@@ -48,7 +48,7 @@ class AntiSpoofDetector:
     """
     MiniFASNetV1SE with Sustained Verification Filter:
     - Real person: Must sustain score >= threshold for 6 frames (200ms)
-    - Phone / Fake: Scores < threshold or drops immediately trigger SPOOF
+    - Phone / Fake: Requires sustained low scores and remains SPOOF with hysteresis
     """
     def __init__(self, model_path: str = None, threshold: float = 0.60):
         self.threshold = threshold
@@ -59,6 +59,7 @@ class AntiSpoofDetector:
         self._ema_score = 0.0
         self._real_streak = 0
         self._fake_streak = 0
+        self._state = "EVALUATING"
 
         models_dir = Path(__file__).resolve().parent / "models"
         if model_path:
@@ -92,6 +93,7 @@ class AntiSpoofDetector:
         self._ema_score = 0.0
         self._real_streak = 0
         self._fake_streak = 0
+        self._state = "EVALUATING"
 
     def _crop_face(self, image: np.ndarray, bbox_xyxy: list) -> np.ndarray:
         src_h, src_w = image.shape[:2]
@@ -152,17 +154,23 @@ class AntiSpoofDetector:
                 self._fake_streak += 1
                 self._real_streak = 0
 
-            # State decision:
-            # 1. REAL requires at least 6 consecutive real frames (~200ms sustained)
-            if self._real_streak >= 6:
-                return "REAL", float(self._ema_score)
-            # 2. SPOOF requires sustained evidence. This avoids switching a real
-            # face to SPOOF because of one or two low-scoring camera frames.
-            elif self._fake_streak >= 8 or self._ema_score < (self.threshold - 0.25):
-                return "SPOOF", float(self._ema_score)
+            # State decision with hysteresis:
+            # SPOOF stays latched until 10 consecutive real frames prove a live face.
+            # This prevents brief changes in a model score from flipping the frame white.
+            if self._state == "SPOOF":
+                if self._real_streak >= 10:
+                    self._state = "REAL"
+                else:
+                    self._state = "SPOOF"
+            elif self._real_streak >= 6:
+                self._state = "REAL"
+            elif self._fake_streak >= 5 or self._ema_score < (self.threshold - 0.25):
+                self._state = "SPOOF"
             else:
-                return "EVALUATING", float(self._ema_score)
+                self._state = "EVALUATING"
+
+            return self._state, float(self._ema_score)
 
         except Exception as e:
             logger.debug("Liveness check error: %s", e)
-            return "REAL", 1.0
+            return "EVALUATING", 0.0

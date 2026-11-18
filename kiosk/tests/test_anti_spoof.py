@@ -32,6 +32,14 @@ class TestAntiSpoof(unittest.TestCase):
         self.assertTrue(is_real)
         self.assertEqual(score, 1.0)
 
+    def test_spoof_state_is_reset_when_face_leaves(self):
+        detector = AntiSpoofDetector(threshold=0.60)
+        detector._state = "SPOOF"
+        detector._fake_streak = 5
+        detector.reset()
+        self.assertEqual(detector._state, "EVALUATING")
+        self.assertEqual(detector._fake_streak, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
