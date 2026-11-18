@@ -51,10 +51,11 @@ class AntiSpoofDetector:
     - Real person: Must sustain a strong score for a long consecutive streak
     - Phone / Fake: Requires sustained low scores and remains SPOOF with hysteresis
     """
-    def __init__(self, model_path: str = None, threshold: float = 0.60):
+    def __init__(self, model_path: str = None, threshold: float = 0.85):
         self.threshold = threshold
         self.net = None
         self.nets = {}
+        self._model_weights = {"V1SE": 0.20, "V2": 0.80}
         self.scale = 4.0
         self.enabled = False
 
@@ -65,8 +66,8 @@ class AntiSpoofDetector:
         self._spoof_entered_at = 0.0
         self._spoof_hold_seconds = 3.0
         self._spoof_release_real_frames = 90
-        self._spoof_release_real_threshold = 0.70
-        self._spoof_release_ema_threshold = 0.65
+        self._spoof_release_real_threshold = max(threshold, 0.85)
+        self._spoof_release_ema_threshold = max(threshold - 0.20, 0.65)
         self._real_to_spoof_frames = 2
         self._last_raw_real_score = 1.0
         self._recognition_cooldown_until = 0.0
@@ -217,18 +218,22 @@ class AntiSpoofDetector:
         try:
             # Convert RGB camera frame to BGR for MiniFASNet
             img_bgr = cv2.cvtColor(frame_bgr_or_rgb, cv2.COLOR_RGB2BGR)
-            model_scores = []
+            weighted_score = 0.0
+            total_weight = 0.0
             for name in ("V1SE", "V2"):
                 model = self.nets.get(name)
                 if model is None:
                     continue
                 face_crop = self._crop_face(img_bgr, bbox_xyxy, model["scale"])
-                model_scores.append(self._predict_real_score(model["net"], face_crop))
+                score = self._predict_real_score(model["net"], face_crop)
+                weight = self._model_weights[name]
+                weighted_score += score * weight
+                total_weight += weight
 
-            if not model_scores:
+            if total_weight == 0.0:
                 return "REAL", 1.0
 
-            raw_real_score = float(sum(model_scores) / len(model_scores))
+            raw_real_score = float(weighted_score / total_weight)
             self._last_raw_real_score = raw_real_score
 
             # Update EMA (40% new raw, 60% memory)

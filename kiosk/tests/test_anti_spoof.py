@@ -12,6 +12,11 @@ from anti_spoof import AntiSpoofDetector
 
 
 class TestAntiSpoof(unittest.TestCase):
+    def test_ensemble_prefers_v2(self):
+        detector = AntiSpoofDetector()
+        self.assertEqual(detector._model_weights["V1SE"], 0.20)
+        self.assertEqual(detector._model_weights["V2"], 0.80)
+
     def test_anti_spoof_initialization(self):
         detector = AntiSpoofDetector()
         self.assertTrue(detector.enabled)
