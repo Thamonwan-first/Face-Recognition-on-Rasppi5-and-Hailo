@@ -792,7 +792,8 @@ export default function AttendancePage() {
         <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', textAlign: 'left' }}>
-              <th style={{ padding: '0.85rem 1rem', width: '80px' }}>รูปสแกน</th>
+              <th style={{ padding: '0.85rem 0.75rem', width: '85px', textAlign: 'center' }}>รูปสแกนเข้า</th>
+              <th style={{ padding: '0.85rem 0.75rem', width: '85px', textAlign: 'center' }}>รูปสแกนออก</th>
               <th style={{ padding: '0.85rem 1rem', width: '120px' }}>รหัสพนักงาน</th>
               <th style={{ padding: '0.85rem 1rem', width: '180px' }}>ชื่อ-นามสกุล</th>
               <th style={{ padding: '0.85rem 1rem', width: '100px' }}>เวลาเข้า</th>
@@ -812,33 +813,33 @@ export default function AttendancePage() {
                     borderBottom: '1px solid #fef3c7',
                   }}
                 >
-                  <td style={{ padding: '0.75rem 1rem' }}>
+                  <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center' }}>
                     {ur.snapshot_url ? (
                       <img
                         src={ur.snapshot_url}
                         alt="ภาพไม่พบใบหน้า"
-                        onClick={() => setPreviewImage(ur.snapshot_url)}
+                        onClick={() => setPreviewImage({ url: ur.snapshot_url, title: 'ภาพถ่ายไม่พบใบหน้าขณะสแกนหน้าตู้ Kiosk' })}
                         title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
                         style={{
-                          width: '56px',
-                          height: '56px',
+                          width: '52px',
+                          height: '52px',
                           borderRadius: '8px',
                           objectFit: 'cover',
                           border: '1.5px solid #f59e0b',
                           background: '#fef3c7',
-                          display: 'block',
+                          display: 'inline-block',
                           cursor: 'pointer',
                         }}
                       />
                     ) : (
                       <div
                         style={{
-                          width: '56px',
-                          height: '56px',
+                          width: '52px',
+                          height: '52px',
                           borderRadius: '8px',
                           border: '1.5px dashed #f59e0b',
                           background: '#fffbeb',
-                          display: 'flex',
+                          display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontSize: '0.72rem',
@@ -848,6 +849,9 @@ export default function AttendancePage() {
                         ไม่มีรูป
                       </div>
                     )}
+                  </td>
+                  <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center' }}>
+                    <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <span style={{ color: '#9ca3af' }}>-</span>
@@ -918,7 +922,6 @@ export default function AttendancePage() {
             {/* 2. Recognized Pairs (Shown when ALL or RECOGNIZED) */}
             {(statusFilter === 'ALL' || statusFilter === 'RECOGNIZED') &&
               filteredRecognized.map((p) => {
-                const snapshotUrl = p.check_in_snapshot || p.check_out_snapshot;
                 return (
                   <tr
                     key={`pair-${p.id}`}
@@ -926,41 +929,93 @@ export default function AttendancePage() {
                       borderBottom: '1px solid #f1f5f9',
                     }}
                   >
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      {snapshotUrl ? (
+                    {/* รูปสแกนเข้า */}
+                    <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center' }}>
+                      {p.check_in_snapshot ? (
                         <img
-                          src={snapshotUrl}
-                          alt="สแกน"
-                          onClick={() => setPreviewImage(snapshotUrl)}
-                          title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
+                          src={p.check_in_snapshot}
+                          alt="สแกนเข้า"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: p.check_in_snapshot,
+                              title: `ภาพถ่ายสแกนเข้างาน: ${p.name || ''} (${p.employee_id || '-'}) ${p.check_in_time ? 'เวลา ' + formatThaiTime(p.check_in_time) + ' น.' : ''}`,
+                            })
+                          }
+                          title="คลิกเพื่อดูรูปภาพสแกนเข้าขนาดใหญ่"
                           style={{
-                            width: '56px',
-                            height: '56px',
+                            width: '52px',
+                            height: '52px',
                             borderRadius: '8px',
                             objectFit: 'cover',
-                            border: '1px solid #e2e8f0',
-                            background: '#f8fafc',
-                            display: 'block',
+                            border: '1.5px solid #86efac',
+                            background: '#f0fdf4',
+                            display: 'inline-block',
                             cursor: 'pointer',
                           }}
                         />
                       ) : (
                         <div
                           style={{
-                            width: '56px',
-                            height: '56px',
+                            width: '52px',
+                            height: '52px',
                             borderRadius: '8px',
                             border: '1px dashed #cbd5e1',
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '0.72rem',
+                            fontSize: '0.7rem',
                             color: '#94a3b8',
                             background: '#f8fafc',
                           }}
                         >
                           ไม่มีรูป
                         </div>
+                      )}
+                    </td>
+
+                    {/* รูปสแกนออก */}
+                    <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center' }}>
+                      {p.check_out_snapshot ? (
+                        <img
+                          src={p.check_out_snapshot}
+                          alt="สแกนออก"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: p.check_out_snapshot,
+                              title: `ภาพถ่ายสแกนออกงาน: ${p.name || ''} (${p.employee_id || '-'}) ${p.check_out_time ? 'เวลา ' + formatThaiTime(p.check_out_time) + ' น.' : ''}`,
+                            })
+                          }
+                          title="คลิกเพื่อดูรูปภาพสแกนออกขนาดใหญ่"
+                          style={{
+                            width: '52px',
+                            height: '52px',
+                            borderRadius: '8px',
+                            objectFit: 'cover',
+                            border: '1.5px solid #93c5fd',
+                            background: '#eff6ff',
+                            display: 'inline-block',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      ) : p.check_out_time ? (
+                        <div
+                          style={{
+                            width: '52px',
+                            height: '52px',
+                            borderRadius: '8px',
+                            border: '1px dashed #cbd5e1',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.7rem',
+                            color: '#94a3b8',
+                            background: '#f8fafc',
+                          }}
+                        >
+                          ไม่มีรูป
+                        </div>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>-</span>
                       )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
@@ -1041,18 +1096,18 @@ export default function AttendancePage() {
                     borderBottom: '1px solid #fee2e2',
                   }}
                 >
-                  <td style={{ padding: '0.75rem 1rem' }}>
+                  <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center' }}>
                     <div
                       style={{
-                        width: '56px',
-                        height: '56px',
+                        width: '52px',
+                        height: '52px',
                         borderRadius: '8px',
                         border: '1.5px dashed #fca5a5',
                         background: '#fff1f2',
-                        display: 'flex',
+                        display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '0.72rem',
+                        fontSize: '0.7rem',
                         color: '#b91c1c',
                         fontWeight: 500,
                         textAlign: 'center',
@@ -1061,6 +1116,9 @@ export default function AttendancePage() {
                     >
                       ยังไม่สแกน
                     </div>
+                  </td>
+                  <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center' }}>
+                    <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.92rem', color: '#1e293b' }}>
@@ -1111,7 +1169,7 @@ export default function AttendancePage() {
               (statusFilter === 'UNRECOGNIZED' && filteredUnrec.length === 0) ||
               (statusFilter === 'ABSENT' && filteredAbsent.length === 0)) && (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>
+                <td colSpan="8" style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>
                   ไม่พบข้อมูลการสแกนในหมวดนี้
                 </td>
               </tr>
@@ -1878,18 +1936,20 @@ export default function AttendancePage() {
               ✕
             </button>
             <img
-              src={previewImage}
+              src={typeof previewImage === 'object' ? previewImage?.url : previewImage}
               alt="ภาพสแกนขนาดใหญ่"
               style={{
                 maxWidth: '80vw',
-                maxHeight: '80vh',
+                maxHeight: '75vh',
                 borderRadius: '8px',
                 objectFit: 'contain',
                 display: 'block',
               }}
             />
-            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
-              ภาพถ่ายหลักฐานขณะสแกนหน้าเครื่อง Kiosk (คลิกพื้นหลังเพื่อปิด)
+            <div style={{ marginTop: '0.65rem', fontSize: '0.9rem', fontWeight: 500, color: '#334155', textAlign: 'center' }}>
+              {typeof previewImage === 'object' && previewImage?.title
+                ? previewImage.title
+                : 'ภาพถ่ายหลักฐานขณะสแกนหน้าเครื่อง Kiosk (คลิกพื้นหลังเพื่อปิด)'}
             </div>
           </div>
         </div>
