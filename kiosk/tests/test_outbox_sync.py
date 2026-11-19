@@ -174,8 +174,36 @@ def test_outbox_partial_sync_retries():
         worker.stop()
 
 
+def test_expired_contract_attendance_recording():
+    """Verify that expired contract scan records event with notes='หมดอายุสัญญาจ้าง' and queues to outbox."""
+    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+        conn = init_db(tmp.name)
+        db = Database(conn)
+
+        rec = db.record_attendance(
+            user_id="user-expired",
+            confidence=0.88,
+            direction="AUTO",
+            device_id="test-kiosk",
+            debounce_seconds=10,
+            notes="หมดอายุสัญญาจ้าง",
+        )
+        assert rec is not None
+        assert rec["user_id"] == "user-expired"
+        assert rec["notes"] == "หมดอายุสัญญาจ้าง"
+
+        cur = conn.cursor()
+        cur.execute("SELECT event_id, payload FROM outbox WHERE event_id = ?", (rec["event_id"],))
+        row = cur.fetchone()
+        assert row is not None
+        payload = json.loads(row["payload"])
+        assert payload["notes"] == "หมดอายุสัญญาจ้าง"
+        assert payload["user_id"] == "user-expired"
+
+
 if __name__ == "__main__":
     test_first_in_last_out_and_debouncing()
     test_outbox_worker_sync_and_isolation()
     test_outbox_partial_sync_retries()
+    test_expired_contract_attendance_recording()
     print("All First-In Last-Out and outbox tests passed successfully!")

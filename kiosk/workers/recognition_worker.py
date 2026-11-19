@@ -215,10 +215,29 @@ class RecognitionWorker(QThread):
                             snapshot_b64 = crop_face_snapshot_b64(frame_rgb, (x1, y1, x2, y2))
 
                             if is_contract_expired:
-                                # พนักงานหมดอายุสัญญาจ้าง: แสดงชื่อ/รูปโปรไฟล์บนจอ แต่ไม่บันทึกเวลาเข้า-ออกงาน
+                                # พนักงานหมดอายุสัญญาจ้าง: แสดงการ์ดเตือนบนจอ และบันทึกประวัติพร้อมหมายเหตุส่งเข้าเว็บ
+                                rec = self.db.record_attendance(
+                                    user_id,
+                                    conf,
+                                    self.current_direction,
+                                    self.config.device_id,
+                                    self.config.debounce_seconds,
+                                    clock_synced=self._is_clock_synced(),
+                                    snapshot_b64=snapshot_b64,
+                                    notes="หมดอายุสัญญาจ้าง",
+                                )
                                 self._recent_scans[user_id] = now
+                                if len(self._recent_scans) > 50:
+                                    cutoff = now - (2 * self.config.debounce_seconds)
+                                    self._recent_scans = {uid: t for uid, t in self._recent_scans.items() if t > cutoff}
+
                                 self.face_recognized.emit(name, conf, "EXPIRED", emp_id, dept, photo_path, True)
-                                logger.warning("⚠️ พนักงาน %s (%s) หมดอายุสัญญาจ้าง — แสดงผลบนหน้าจอแต่ไม่บันทึกเวลา", name, emp_id)
+                                logger.warning("⚠️ พนักงาน %s (%s) หมดอายุสัญญาจ้าง — บันทึกประวัติและส่งข้อมูลเข้าเว็บ (หมายเหตุ: หมดอายุสัญญาจ้าง)", name, emp_id)
+                                if self.on_attendance_recorded:
+                                    try:
+                                        self.on_attendance_recorded()
+                                    except Exception as cb_err:
+                                        logger.debug("on_attendance_recorded failed: %s", cb_err)
                             else:
                                 rec = self.db.record_attendance(
                                     user_id,

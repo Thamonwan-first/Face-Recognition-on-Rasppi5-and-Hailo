@@ -293,6 +293,14 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 						lastPair.CheckOutSnapshot = &event.SnapshotURL
 					}
 
+					if event.Notes != "" {
+						if lastPair.AdjustmentReason != "" && !strings.Contains(lastPair.AdjustmentReason, event.Notes) {
+							lastPair.AdjustmentReason = lastPair.AdjustmentReason + ", " + event.Notes
+						} else if lastPair.AdjustmentReason == "" {
+							lastPair.AdjustmentReason = event.Notes
+						}
+					}
+
 					if lastPair.CheckInTime != nil {
 						duration := event.CreatedAt.Sub(*lastPair.CheckInTime)
 						hours := duration.Hours()

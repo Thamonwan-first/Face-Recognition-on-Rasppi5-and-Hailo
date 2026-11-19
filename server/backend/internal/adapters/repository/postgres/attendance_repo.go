@@ -385,11 +385,11 @@ func (r *attendanceRepo) SaveEventAndPair(ctx context.Context, event *entity.Att
 
 	// 1. Save event
 	queryEv := `
-	INSERT INTO attendance_events (event_id, user_id, device_id, direction, confidence, clock_synced, snapshot_url, created_at, synced_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	INSERT INTO attendance_events (event_id, user_id, device_id, direction, confidence, clock_synced, snapshot_url, notes, created_at, synced_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 	if _, err := tx.ExecContext(ctx, queryEv,
-		event.EventID, event.UserID, event.DeviceID, event.Direction, event.Confidence, event.ClockSynced, event.SnapshotURL, event.CreatedAt, event.SyncedAt); err != nil {
+		event.EventID, event.UserID, event.DeviceID, event.Direction, event.Confidence, event.ClockSynced, event.SnapshotURL, event.Notes, event.CreatedAt, event.SyncedAt); err != nil {
 		return err
 	}
 
