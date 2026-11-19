@@ -336,7 +336,6 @@ export default function AttendancePage() {
             <td class="text-center">${inTime ? inTime + ' น.' : '-'}</td>
             <td class="text-center">${outTime ? outTime + ' น.' : '-'}</td>
             <td class="text-center">${hours != null ? hours.toFixed(1) + ' ชม.' : '-'}</td>
-            <td class="${statusClass}">${statusLabel}</td>
             <td>${p.adjustment_reason || p.notes || '-'}</td>
           </tr>
         `;
@@ -386,8 +385,7 @@ export default function AttendancePage() {
               <th style="width: 110px;">เวลาเข้างาน</th>
               <th style="width: 110px;">เวลาออกงาน</th>
               <th style="width: 110px;">ชั่วโมงทำงาน</th>
-              <th style="width: 130px;">สถานะ</th>
-              <th style="width: 220px;">หมายเหตุ / เหตุผล</th>
+              <th style="width: 250px;">หมายเหตุ / เหตุผล</th>
             </tr>
           </thead>
           <tbody>
@@ -421,12 +419,11 @@ export default function AttendancePage() {
       alert('ไม่พบข้อมูลการลงเวลาที่จะส่งออก');
       return;
     }
-    const headers = ['ลำดับ', 'วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'สังกัด/ฝ่าย', 'เวลาเข้างาน', 'เวลาออกงาน', 'ชั่วโมงทำงาน', 'สถานะ', 'หมายเหตุ'];
+    const headers = ['ลำดับ', 'วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'สังกัด/ฝ่าย', 'เวลาเข้างาน', 'เวลาออกงาน', 'ชั่วโมงทำงาน', 'หมายเหตุ'];
     const rows = list.map((p, idx) => {
       const inTime = formatThaiTime(p.check_in_time);
       const outTime = formatThaiTime(p.check_out_time);
       const hours = p.hours_worked != null ? Number(p.hours_worked).toFixed(1) : '-';
-      const statusLabel = getPairStatusLabel(p);
       const reason = p.adjustment_reason || p.notes || '-';
 
       return [
@@ -438,7 +435,6 @@ export default function AttendancePage() {
         inTime ? `${inTime} น.` : '-',
         outTime ? `${outTime} น.` : '-',
         hours !== '-' ? `${hours} ชม.` : '-',
-        statusLabel,
         reason,
       ];
     });
@@ -801,8 +797,7 @@ export default function AttendancePage() {
               <th style={{ padding: '0.85rem 1rem', width: '180px' }}>ชื่อ-นามสกุล</th>
               <th style={{ padding: '0.85rem 1rem', width: '100px' }}>เวลาเข้า</th>
               <th style={{ padding: '0.85rem 1rem', width: '100px' }}>เวลาออก</th>
-              <th style={{ padding: '0.85rem 1rem', width: '130px' }}>สถานะ</th>
-              <th style={{ padding: '0.85rem 1rem', width: '150px' }}>หมายเหตุ</th>
+              <th style={{ padding: '0.85rem 1rem', width: '160px' }}>หมายเหตุ</th>
               <th style={{ padding: '0.85rem 1rem', width: '110px', textAlign: 'center' }}>จัดการ</th>
             </tr>
           </thead>
@@ -874,24 +869,8 @@ export default function AttendancePage() {
                     <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
-                    <span
-                      style={{
-                        padding: '0.25rem 0.6rem',
-                        borderRadius: '20px',
-                        fontSize: '0.8rem',
-                        background: '#fef3c7',
-                        color: '#b45309',
-                        fontWeight: 700,
-                        border: '1px solid #fde68a',
-                        display: 'inline-block',
-                      }}
-                    >
-                      ไม่พบใบหน้า
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem' }}>
                     <span style={{ fontSize: '0.8rem', color: '#d97706', fontWeight: 600 }}>
-                      บุคคลภายนอก/ยังไม่ลงทะเบียน
+                      ไม่พบใบหน้า (บุคคลภายนอก/ยังไม่ลงทะเบียน)
                     </span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
@@ -1014,9 +993,6 @@ export default function AttendancePage() {
                       )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
-                      {renderStatusBadge(p)}
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
                       {p.adjustment_reason ? (
                         <span
                           style={{
@@ -1104,23 +1080,9 @@ export default function AttendancePage() {
                     <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
-                    <span
-                      style={{
-                        padding: '0.25rem 0.6rem',
-                        borderRadius: '20px',
-                        fontSize: '0.8rem',
-                        background: '#fee2e2',
-                        color: '#b91c1c',
-                        fontWeight: 700,
-                        border: '1px solid #f87171',
-                        display: 'inline-block',
-                      }}
-                    >
+                    <span style={{ fontSize: '0.85rem', color: '#b91c1c', fontWeight: 600 }}>
                       ยังไม่สแกน
                     </span>
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem' }}>
-                    <span style={{ color: '#94a3b8' }}>-</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                     <button
@@ -1149,7 +1111,7 @@ export default function AttendancePage() {
               (statusFilter === 'UNRECOGNIZED' && filteredUnrec.length === 0) ||
               (statusFilter === 'ABSENT' && filteredAbsent.length === 0)) && (
               <tr>
-                <td colSpan="6" style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>
+                <td colSpan="7" style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>
                   ไม่พบข้อมูลการสแกนในหมวดนี้
                 </td>
               </tr>
