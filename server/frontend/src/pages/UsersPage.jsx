@@ -361,17 +361,11 @@ export default function UsersPage() {
                       return (
                         <span
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
                             fontSize: '0.85rem',
                             fontWeight: 600,
                             color: isInactive ? '#dc2626' : '#16a34a',
-                            background: 'transparent',
-                            padding: 0,
                           }}
                         >
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: isInactive ? '#dc2626' : '#16a34a' }}></span>
                           {effectiveStatus}
                         </span>
                       );
@@ -381,33 +375,21 @@ export default function UsersPage() {
                     {u.has_embedding ? (
                       <span
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
                           fontSize: '0.85rem',
                           fontWeight: 600,
                           color: '#15803d',
-                          background: 'transparent',
-                          padding: 0,
                         }}
                       >
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }}></span>
                         มีรูปใบหน้า
                       </span>
                     ) : (
                       <span
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
                           fontSize: '0.85rem',
                           fontWeight: 500,
                           color: '#64748b',
-                          background: 'transparent',
-                          padding: 0,
                         }}
                       >
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#94a3b8' }}></span>
                         ยังไม่มีรูปใบหน้า
                       </span>
                     )}
