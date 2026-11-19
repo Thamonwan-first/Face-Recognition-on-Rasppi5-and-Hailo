@@ -335,51 +335,18 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		return uc.attendanceRepo.SaveEventAndPair(ctx, event, newPair, false)
 	}
 
-	// 3. Update or Create Daily Attendance Pair
-	pair, err := uc.attendanceRepo.FindOpenPair(ctx, event.UserID, workDate)
+	// 3. Update or Create Daily Attendance Pair (Enforce STRICTLY 1 row per employee per work date - First-In, Last-Out)
+	pair, err := uc.attendanceRepo.FindLastPairByUserAndDate(ctx, event.UserID, workDate)
+
+	// If no pair today, also check if there is an open pair from yesterday (e.g. overnight shift or crossing midnight)
 	if (err != nil || pair == nil) && (event.Direction == "OUT" || event.Direction == "AUTO") {
-		// Also check if there is an open pair from yesterday (e.g. overnight shift or crossing midnight)
 		yesterday := event.CreatedAt.In(loc).AddDate(0, 0, -1).Format("2006-01-02")
 		if prevOpen, err := uc.attendanceRepo.FindOpenPair(ctx, event.UserID, yesterday); err == nil && prevOpen != nil {
 			pair = prevOpen
 		}
 	}
+
 	if pair == nil {
-		// If event is OUT or AUTO, check if there is an existing pair today for this user
-		// To support First-In, Last-Out logic (re-scanning OUT updates checkout time)
-		if event.Direction == "OUT" || event.Direction == "AUTO" {
-			if lastPair, err := uc.attendanceRepo.FindLastPairByUserAndDate(ctx, event.UserID, workDate); err == nil && lastPair != nil && lastPair.Status != "expired" {
-				if event.Direction == "OUT" || (event.Direction == "AUTO" && lastPair.CheckInEventID != nil) {
-					now := time.Now().UTC()
-					lastPair.UpdatedAt = now
-					lastPair.CheckOutEventID = &event.EventID
-					lastPair.CheckOutTime = &event.CreatedAt
-					if event.SnapshotURL != "" {
-						lastPair.CheckOutSnapshot = &event.SnapshotURL
-					}
-
-					if event.Notes != "" {
-						if lastPair.AdjustmentReason != "" && !strings.Contains(lastPair.AdjustmentReason, event.Notes) {
-							lastPair.AdjustmentReason = lastPair.AdjustmentReason + ", " + event.Notes
-						} else if lastPair.AdjustmentReason == "" {
-							lastPair.AdjustmentReason = event.Notes
-						}
-					}
-
-					if lastPair.CheckInTime != nil {
-						duration := event.CreatedAt.Sub(*lastPair.CheckInTime)
-						hours := duration.Hours()
-						if hours < 0 {
-							hours = 0
-						}
-						lastPair.HoursWorked = &hours
-					}
-					lastPair.Status = CalculateAttendanceStatus(lastPair.CheckInTime, lastPair.CheckOutTime, lastPair.HoursWorked, lastPair.IsManual)
-					return uc.attendanceRepo.SaveEventAndPair(ctx, event, lastPair, true)
-				}
-			}
-		}
-
 		newPair := &entity.AttendancePair{
 			UserID:    event.UserID,
 			WorkDate:  workDate,
@@ -408,7 +375,7 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		return uc.attendanceRepo.SaveEventAndPair(ctx, event, newPair, false)
 	}
 
-	// Existing open pair
+	// Pair already exists today: ALWAYS update the existing pair (NEVER create a duplicate row)
 	now := time.Now().UTC()
 	pair.UpdatedAt = now
 
@@ -420,7 +387,26 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		}
 	}
 
-	if event.Direction == "OUT" || (event.Direction == "AUTO" && pair.CheckInEventID != nil) {
+	if pair.CheckInEventID == nil {
+		// Existing pair only had checkout; now we record check-in
+		pair.CheckInEventID = &event.EventID
+		pair.CheckInTime = &event.CreatedAt
+		if event.SnapshotURL != "" {
+			pair.CheckInSnapshot = &event.SnapshotURL
+		}
+		if pair.CheckOutTime != nil {
+			duration := pair.CheckOutTime.Sub(event.CreatedAt)
+			hours := duration.Hours()
+			if hours < 0 {
+				hours = 0
+			}
+			pair.HoursWorked = &hours
+			pair.Status = CalculateAttendanceStatus(pair.CheckInTime, pair.CheckOutTime, pair.HoursWorked, pair.IsManual)
+		} else {
+			pair.Status = "open"
+		}
+	} else {
+		// First-In is already recorded: any subsequent scan today updates Check-Out (Last-Out)
 		pair.CheckOutEventID = &event.EventID
 		pair.CheckOutTime = &event.CreatedAt
 		if event.SnapshotURL != "" {
@@ -436,13 +422,6 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 			pair.HoursWorked = &hours
 		}
 		pair.Status = CalculateAttendanceStatus(pair.CheckInTime, pair.CheckOutTime, pair.HoursWorked, pair.IsManual)
-	} else if pair.CheckInEventID == nil {
-		pair.CheckInEventID = &event.EventID
-		pair.CheckInTime = &event.CreatedAt
-		if event.SnapshotURL != "" {
-			pair.CheckInSnapshot = &event.SnapshotURL
-		}
-		pair.Status = "open"
 	}
 
 	return uc.attendanceRepo.SaveEventAndPair(ctx, event, pair, true)

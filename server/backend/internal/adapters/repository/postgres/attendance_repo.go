@@ -179,7 +179,48 @@ func (r *attendanceRepo) ListPairs(ctx context.Context, startDate, endDate, user
 
 		pairs = append(pairs, &p)
 	}
-	return pairs, nil
+
+	// Deduplicate by user_id + work_date so that no employee ever appears as duplicate rows on the same day
+	seen := make(map[string]*entity.AttendancePair)
+	var uniquePairs []*entity.AttendancePair
+	for _, p := range pairs {
+		wDate := p.WorkDate
+		if len(wDate) >= 10 {
+			wDate = wDate[:10]
+		}
+		key := fmt.Sprintf("%s_%s", p.UserID, wDate)
+		if existing, found := seen[key]; found {
+			// Merge historical duplicate: keep earliest check-in and latest check-out
+			if existing.CheckInTime == nil && p.CheckInTime != nil {
+				existing.CheckInTime = p.CheckInTime
+				existing.CheckInEventID = p.CheckInEventID
+				existing.CheckInSnapshot = p.CheckInSnapshot
+			}
+			if p.CheckOutTime != nil && (existing.CheckOutTime == nil || p.CheckOutTime.After(*existing.CheckOutTime)) {
+				existing.CheckOutTime = p.CheckOutTime
+				existing.CheckOutEventID = p.CheckOutEventID
+				existing.CheckOutSnapshot = p.CheckOutSnapshot
+			}
+			if (existing.CheckInSnapshot == nil || *existing.CheckInSnapshot == "") && p.CheckInSnapshot != nil {
+				existing.CheckInSnapshot = p.CheckInSnapshot
+			}
+			if (existing.CheckOutSnapshot == nil || *existing.CheckOutSnapshot == "") && p.CheckOutSnapshot != nil {
+				existing.CheckOutSnapshot = p.CheckOutSnapshot
+			}
+			if existing.CheckInTime != nil && existing.CheckOutTime != nil {
+				hrs := existing.CheckOutTime.Sub(*existing.CheckInTime).Hours()
+				if hrs < 0 {
+					hrs = 0
+				}
+				existing.HoursWorked = &hrs
+			}
+			continue
+		}
+		seen[key] = p
+		uniquePairs = append(uniquePairs, p)
+	}
+
+	return uniquePairs, nil
 }
 
 func (r *attendanceRepo) GetPairByID(ctx context.Context, id int) (*entity.AttendancePair, error) {

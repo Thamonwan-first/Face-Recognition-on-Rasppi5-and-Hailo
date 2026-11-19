@@ -197,7 +197,7 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 		t.Fatalf("expected ~8 hours worked")
 	}
 
-	// Test second session (e.g. after lunch return) on the same day
+	// Test subsequent scan on the same day: MUST NOT create a second row (First-In, Last-Out)
 	eventIn2 := &entity.AttendanceEvent{
 		EventID:   "evt-3",
 		UserID:    "user-100",
@@ -206,14 +206,17 @@ func TestAttendanceUseCase_ProcessEvent(t *testing.T) {
 	}
 	err = uc.ProcessEvent(context.Background(), eventIn2)
 	if err != nil {
-		t.Fatalf("expected no error on second check-in, got %v", err)
+		t.Fatalf("expected no error on subsequent scan, got %v", err)
 	}
 
-	if len(repo.pairs) != 2 {
-		t.Fatalf("expected 2 separate pairs for multiple sessions, got %d", len(repo.pairs))
+	if len(repo.pairs) != 1 {
+		t.Fatalf("expected strictly 1 pair for user on the same date (no duplicate rows), got %d", len(repo.pairs))
 	}
-	if repo.pairs[1].Status != "open" {
-		t.Fatalf("expected second pair to be open, got %s", repo.pairs[1].Status)
+	if *repo.pairs[0].CheckOutEventID != "evt-3" {
+		t.Fatalf("expected check-out event ID to be updated to evt-3, got %s", *repo.pairs[0].CheckOutEventID)
+	}
+	if repo.pairs[0].HoursWorked == nil || *repo.pairs[0].HoursWorked < 8.9 {
+		t.Fatalf("expected updated ~9 hours worked, got %v", repo.pairs[0].HoursWorked)
 	}
 }
 
