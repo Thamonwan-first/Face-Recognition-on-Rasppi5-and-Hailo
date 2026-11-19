@@ -133,7 +133,7 @@ class AttendanceSuccessPopup(QDialog):
         layout.setSpacing(4)
 
         # 1. หัวข้อสถานะ
-        title_text = "สถานะ Inactive (หมดสัญญาจ้าง)" if is_expired else "บันทึกเวลาสำเร็จ"
+        title_text = "หมดอายุสัญญาจ้าง" if is_expired else "บันทึกเวลาสำเร็จ"
         title_color = "#DC2626" if is_expired else ACCENT_SUCCESS
         title = QLabel(title_text)
         title.setFont(QFont(FONT_FAMILY, 13, QFont.Bold))

@@ -272,6 +272,7 @@ export default function AttendancePage() {
   };
 
   const getPairStatusLabel = (p) => {
+    if (p.status === 'expired' || (p.adjustment_reason && p.adjustment_reason.includes('หมดอายุ'))) return '-';
     if (p.is_manual || p.status === 'adjusted') return 'แก้ไขโดยผู้ดูแล';
     if (p.status === 'absent') return 'ยังไม่สแกน';
     if (p.status === 'late') return 'มาสาย';
@@ -457,20 +458,7 @@ export default function AttendancePage() {
 
   const renderStatusBadge = (p) => {
     if (p.status === 'expired' || (p.adjustment_reason && p.adjustment_reason.includes('หมดอายุ'))) {
-      return (
-        <span
-          style={{
-            padding: '0.25rem 0.6rem',
-            borderRadius: '20px',
-            fontSize: '0.8rem',
-            background: '#fee2e2',
-            color: '#dc2626',
-            fontWeight: 600,
-          }}
-        >
-          หมดอายุสัญญาจ้าง
-        </span>
-      );
+      return <span style={{ color: '#94a3b8' }}>-</span>;
     }
     if (p.is_manual || p.status === 'adjusted') {
       return (
@@ -1032,12 +1020,11 @@ export default function AttendancePage() {
                       {p.adjustment_reason ? (
                         <span
                           style={{
-                            fontSize: '0.8rem',
+                            fontSize: '0.85rem',
                             color: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? '#dc2626' : '#475569',
                             fontWeight: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? 600 : 400,
-                            background: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? '#fef2f2' : 'transparent',
-                            padding: p.adjustment_reason.includes('Anti-Spoof') || p.adjustment_reason.includes('หมดอายุ') ? '2px 8px' : 0,
-                            borderRadius: '4px',
+                            background: 'transparent',
+                            padding: 0,
                             display: 'inline-block',
                           }}
                         >
