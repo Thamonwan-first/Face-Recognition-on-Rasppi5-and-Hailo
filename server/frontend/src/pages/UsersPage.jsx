@@ -357,7 +357,24 @@ export default function UsersPage() {
                     {(() => {
                       const isExpired = u.end_date && todayStr > u.end_date.slice(0, 10);
                       const effectiveStatus = (isExpired || u.status === 'inactive') ? 'inactive' : 'active';
-                      return <StatusBadge status={effectiveStatus} />;
+                      const isInactive = effectiveStatus === 'inactive';
+                      return (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            color: isInactive ? '#dc2626' : '#16a34a',
+                            background: 'transparent',
+                            padding: 0,
+                          }}
+                        >
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: isInactive ? '#dc2626' : '#16a34a' }}></span>
+                          {effectiveStatus}
+                        </span>
+                      );
                     })()}
                   </td>
                   <td>
@@ -367,13 +384,11 @@ export default function UsersPage() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '0.35rem',
-                          padding: '0.25rem 0.65rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.8rem',
+                          fontSize: '0.85rem',
                           fontWeight: 600,
-                          background: '#dcfce7',
                           color: '#15803d',
-                          border: '1px solid #bbf7d0',
+                          background: 'transparent',
+                          padding: 0,
                         }}
                       >
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }}></span>
@@ -385,13 +400,11 @@ export default function UsersPage() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '0.35rem',
-                          padding: '0.25rem 0.65rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.8rem',
+                          fontSize: '0.85rem',
                           fontWeight: 500,
-                          background: '#f1f5f9',
                           color: '#64748b',
-                          border: '1px solid #e2e8f0',
+                          background: 'transparent',
+                          padding: 0,
                         }}
                       >
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#94a3b8' }}></span>
@@ -565,8 +578,8 @@ export default function UsersPage() {
                       marginTop: '0.75rem',
                       padding: '0.65rem 0.85rem',
                       borderRadius: '8px',
-                      background: isExpired ? '#fef2f2' : '#f0fdf4',
-                      border: `1px solid ${isExpired ? '#fecaca' : '#bbf7d0'}`,
+                      border: '1px solid #e2e8f0',
+                      background: 'transparent',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -578,12 +591,10 @@ export default function UsersPage() {
                     <span
                       style={{
                         fontWeight: 700,
-                        fontSize: '0.8rem',
+                        fontSize: '0.85rem',
                         color: isExpired ? '#dc2626' : '#15803d',
-                        background: isExpired ? '#fee2e2' : '#dcfce7',
-                        padding: '0.2rem 0.65rem',
-                        borderRadius: '20px',
-                        border: `1px solid ${isExpired ? '#fca5a5' : '#86efac'}`,
+                        background: 'transparent',
+                        padding: 0,
                       }}
                     >
                       {isExpired ? 'inactive (หมดสัญญา)' : 'active (ปกติ)'}
