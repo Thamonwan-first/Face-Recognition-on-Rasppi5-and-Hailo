@@ -149,12 +149,14 @@ func (uc *UserUseCase) Update(ctx context.Context, adminID, id string, dto *User
 		}
 	}
 
+	if dto.Status != "" {
+		user.Status = dto.Status
+	}
+
 	// Calculate status automatically based on end_date
 	todayStr := time.Now().UTC().Format("2006-01-02")
 	if user.EndDate != nil && *user.EndDate != "" && *user.EndDate < todayStr {
 		user.Status = "inactive"
-	} else {
-		user.Status = "active"
 	}
 
 	user.UpdatedAt = time.Now().UTC()

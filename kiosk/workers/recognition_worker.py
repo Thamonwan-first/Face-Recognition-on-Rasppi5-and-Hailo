@@ -192,9 +192,10 @@ class RecognitionWorker(QThread):
                         user_status = user_info.get("status", "active")
                         end_date_str = user_info.get("end_date")
 
-                        # ตรวจสอบการหมดอายุสัญญาจ้าง
+                        # ตรวจสอบการหมดอายุสัญญาจ้าง / สถานะไม่พร้อมใช้งาน (inactive)
                         is_contract_expired = False
-                        if user_status != "active":
+                        status_clean = str(user_status or "").strip().lower()
+                        if status_clean and status_clean not in ("active", "ปกติ"):
                             is_contract_expired = True
                         elif end_date_str:
                             try:

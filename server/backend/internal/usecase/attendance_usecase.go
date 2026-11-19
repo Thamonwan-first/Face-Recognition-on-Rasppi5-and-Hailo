@@ -273,18 +273,49 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 	loc := time.FixedZone("Asia/Bangkok", 7*3600)
 	workDate := event.CreatedAt.In(loc).Format("2006-01-02")
 
-	// Special handling for Expired Contracts:
+	// Special handling for Expired Contracts / Inactive employees:
 	// Do NOT record check-in or check-out times, but record snapshot and note so HR can audit on the web dashboard.
 	isExpired := event.Direction == "EXPIRED" || strings.Contains(event.Notes, "หมดอายุ")
+	if !isExpired && uc.userRepo != nil && event.UserID != "" {
+		if u, err := uc.userRepo.GetByID(ctx, event.UserID); err == nil && u != nil {
+			if u.Status != "active" {
+				isExpired = true
+			} else if u.EndDate != nil && strings.TrimSpace(*u.EndDate) != "" {
+				endStr := strings.TrimSpace(*u.EndDate)
+				if len(endStr) >= 10 {
+					if endD, err := time.Parse("2006-01-02", endStr[:10]); err == nil {
+						todayLoc, _ := time.ParseInLocation("2006-01-02", workDate, loc)
+						if todayLoc.After(endD) {
+							isExpired = true
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if isExpired {
+		if event.Notes == "" {
+			event.Notes = "หมดอายุสัญญาจ้าง"
+		}
 		lastPair, _ := uc.attendanceRepo.FindLastPairByUserAndDate(ctx, event.UserID, workDate)
 		if lastPair != nil {
 			now := time.Now().UTC()
 			lastPair.UpdatedAt = now
-			if event.SnapshotURL != "" && (lastPair.CheckInSnapshot == nil || *lastPair.CheckInSnapshot == "") {
-				lastPair.CheckInSnapshot = &event.SnapshotURL
+			if event.SnapshotURL != "" {
+				if lastPair.CheckInSnapshot == nil || *lastPair.CheckInSnapshot == "" {
+					lastPair.CheckInSnapshot = &event.SnapshotURL
+				} else if lastPair.CheckOutSnapshot == nil || *lastPair.CheckOutSnapshot == "" {
+					lastPair.CheckOutSnapshot = &event.SnapshotURL
+				}
 			}
 			lastPair.Status = "expired"
+			lastPair.CheckInEventID = nil
+			lastPair.CheckOutEventID = nil
+			lastPair.CheckInTime = nil
+			lastPair.CheckOutTime = nil
+			lastPair.HoursWorked = nil
+
 			if event.Notes != "" {
 				if lastPair.AdjustmentReason != "" && !strings.Contains(lastPair.AdjustmentReason, event.Notes) {
 					lastPair.AdjustmentReason = lastPair.AdjustmentReason + ", " + event.Notes
@@ -298,7 +329,8 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		newPair := &entity.AttendancePair{
 			UserID:           event.UserID,
 			WorkDate:         workDate,
-			CheckInEventID:   &event.EventID,
+			CheckInEventID:   nil, // NEVER set CheckInEventID for expired/inactive so check_in_time remains nil
+			CheckOutEventID:  nil,
 			CheckInSnapshot:  &event.SnapshotURL,
 			Status:           "expired",
 			AdjustmentReason: event.Notes,

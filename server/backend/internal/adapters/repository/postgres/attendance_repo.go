@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"attendance-backend/internal/entity"
@@ -73,8 +74,8 @@ func (r *attendanceRepo) ListPairs(ctx context.Context, startDate, endDate, user
 	       p.check_in_event_id, p.check_out_event_id,
 	       in_ev.device_id as check_in_device_id,
 	       out_ev.device_id as check_out_device_id,
-	       in_ev.created_at as check_in_time,
-	       out_ev.created_at as check_out_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE in_ev.created_at END as check_in_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE out_ev.created_at END as check_out_time,
 	       COALESCE(in_ev.snapshot_url, p.check_in_snapshot, '') as in_snapshot,
 	       COALESCE(out_ev.snapshot_url, p.check_out_snapshot, '') as out_snapshot,
 	       p.work_date, p.hours_worked, p.status, p.is_manual, COALESCE(p.adjustment_reason, ''), p.created_at, p.updated_at
@@ -171,6 +172,12 @@ func (r *attendanceRepo) ListPairs(ctx context.Context, startDate, endDate, user
 			p.HoursWorked = &hours.Float64
 		}
 
+		if p.Status == "expired" || strings.Contains(p.AdjustmentReason, "หมดอายุ") {
+			p.CheckInTime = nil
+			p.CheckOutTime = nil
+			p.HoursWorked = nil
+		}
+
 		pairs = append(pairs, &p)
 	}
 	return pairs, nil
@@ -182,8 +189,8 @@ func (r *attendanceRepo) GetPairByID(ctx context.Context, id int) (*entity.Atten
 	       p.check_in_event_id, p.check_out_event_id,
 	       in_ev.device_id as check_in_device_id,
 	       out_ev.device_id as check_out_device_id,
-	       in_ev.created_at as check_in_time,
-	       out_ev.created_at as check_out_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE in_ev.created_at END as check_in_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE out_ev.created_at END as check_out_time,
 	       COALESCE(in_ev.snapshot_url, p.check_in_snapshot, '') as in_snapshot,
 	       COALESCE(out_ev.snapshot_url, p.check_out_snapshot, '') as out_snapshot,
 	       p.work_date, p.hours_worked, p.status, p.is_manual, COALESCE(p.adjustment_reason, ''), p.created_at, p.updated_at
@@ -244,14 +251,20 @@ func (r *attendanceRepo) GetPairByID(ctx context.Context, id int) (*entity.Atten
 		p.HoursWorked = &hours.Float64
 	}
 
+	if p.Status == "expired" || strings.Contains(p.AdjustmentReason, "หมดอายุ") {
+		p.CheckInTime = nil
+		p.CheckOutTime = nil
+		p.HoursWorked = nil
+	}
+
 	return &p, nil
 }
 
 func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
 	query := `
 	SELECT p.id, p.user_id, p.check_in_event_id, p.check_out_event_id,
-	       in_ev.created_at as check_in_time,
-	       out_ev.created_at as check_out_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE in_ev.created_at END as check_in_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE out_ev.created_at END as check_out_time,
 	       COALESCE(in_ev.snapshot_url, p.check_in_snapshot, '') as in_snapshot,
 	       COALESCE(out_ev.snapshot_url, p.check_out_snapshot, '') as out_snapshot,
 	       p.work_date, p.hours_worked, p.status, p.is_manual, COALESCE(p.adjustment_reason, ''), p.created_at, p.updated_at
@@ -297,14 +310,20 @@ func (r *attendanceRepo) FindOpenPair(ctx context.Context, userID, workDate stri
 		p.HoursWorked = &hours.Float64
 	}
 
+	if p.Status == "expired" || strings.Contains(p.AdjustmentReason, "หมดอายุ") {
+		p.CheckInTime = nil
+		p.CheckOutTime = nil
+		p.HoursWorked = nil
+	}
+
 	return &p, nil
 }
 
 func (r *attendanceRepo) FindLastPairByUserAndDate(ctx context.Context, userID, workDate string) (*entity.AttendancePair, error) {
 	query := `
 	SELECT p.id, p.user_id, p.check_in_event_id, p.check_out_event_id,
-	       in_ev.created_at as check_in_time,
-	       out_ev.created_at as check_out_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE in_ev.created_at END as check_in_time,
+	       CASE WHEN p.status = 'expired' OR p.adjustment_reason LIKE '%หมดอายุ%' THEN NULL ELSE out_ev.created_at END as check_out_time,
 	       COALESCE(in_ev.snapshot_url, p.check_in_snapshot, '') as in_snapshot,
 	       COALESCE(out_ev.snapshot_url, p.check_out_snapshot, '') as out_snapshot,
 	       p.work_date, p.hours_worked, p.status, p.is_manual, COALESCE(p.adjustment_reason, ''), p.created_at, p.updated_at
@@ -351,6 +370,12 @@ func (r *attendanceRepo) FindLastPairByUserAndDate(ctx context.Context, userID, 
 		p.HoursWorked = &hours.Float64
 	}
 
+	if p.Status == "expired" || strings.Contains(p.AdjustmentReason, "หมดอายุ") {
+		p.CheckInTime = nil
+		p.CheckOutTime = nil
+		p.HoursWorked = nil
+	}
+
 	return &p, nil
 }
 
@@ -395,6 +420,10 @@ func (r *attendanceRepo) SaveEventAndPair(ctx context.Context, event *entity.Att
 
 	// 2. Save or update pair atomically
 	if pair != nil {
+		if pair.Status == "expired" || strings.Contains(pair.AdjustmentReason, "หมดอายุ") {
+			pair.CheckInEventID = nil
+			pair.CheckOutEventID = nil
+		}
 		if isUpdate {
 			queryPair := `
 			UPDATE attendance_pairs SET

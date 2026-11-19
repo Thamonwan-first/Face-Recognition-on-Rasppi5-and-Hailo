@@ -315,16 +315,15 @@ export default function AttendancePage() {
 
     const rowsHtml = list
       .map((p, idx) => {
-        const statusLabel = getPairStatusLabel(p);
-        const statusClass = getPairStatusClass(p);
-        const inTime = formatThaiTime(p.check_in_time);
-        const outTime = formatThaiTime(p.check_out_time);
-        const hours = p.hours_worked != null ? Number(p.hours_worked) : null;
+        const isExpiredPair = p.status === 'expired' || (p.adjustment_reason && p.adjustment_reason.includes('หมดอายุ'));
+        const inTime = isExpiredPair ? '' : formatThaiTime(p.check_in_time);
+        const outTime = isExpiredPair ? '' : formatThaiTime(p.check_out_time);
+        const hours = (!isExpiredPair && p.hours_worked != null) ? Number(p.hours_worked) : null;
         if (hours != null) totalHours += hours;
 
         if (p.status === 'late') lateCount++;
         else if (p.status === 'absent') absentCount++;
-        else if (p.status === 'on_time' || (!p.status && inTime)) onTimeCount++;
+        else if (!isExpiredPair && (p.status === 'on_time' || (!p.status && inTime))) onTimeCount++;
 
         return `
           <tr>
@@ -421,9 +420,10 @@ export default function AttendancePage() {
     }
     const headers = ['ลำดับ', 'วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'สังกัด/ฝ่าย', 'เวลาเข้างาน', 'เวลาออกงาน', 'ชั่วโมงทำงาน', 'หมายเหตุ'];
     const rows = list.map((p, idx) => {
-      const inTime = formatThaiTime(p.check_in_time);
-      const outTime = formatThaiTime(p.check_out_time);
-      const hours = p.hours_worked != null ? Number(p.hours_worked).toFixed(1) : '-';
+      const isExpiredPair = p.status === 'expired' || (p.adjustment_reason && p.adjustment_reason.includes('หมดอายุ'));
+      const inTime = isExpiredPair ? '' : formatThaiTime(p.check_in_time);
+      const outTime = isExpiredPair ? '' : formatThaiTime(p.check_out_time);
+      const hours = (!isExpiredPair && p.hours_worked != null) ? Number(p.hours_worked).toFixed(1) : '-';
       const reason = p.adjustment_reason || p.notes || '-';
 
       return [
@@ -938,7 +938,7 @@ export default function AttendancePage() {
                           onClick={() =>
                             setPreviewImage({
                               url: p.check_in_snapshot,
-                              title: `ภาพถ่ายสแกนเข้างาน: ${p.name || ''} (${p.employee_id || '-'}) ${p.check_in_time ? 'เวลา ' + formatThaiTime(p.check_in_time) + ' น.' : ''}`,
+                              title: `ภาพถ่ายสแกนเข้างาน: ${p.name || ''} (${p.employee_id || '-'}) ${p.check_in_time && p.status !== 'expired' && !p.adjustment_reason?.includes('หมดอายุ') ? 'เวลา ' + formatThaiTime(p.check_in_time) + ' น.' : ''}`,
                             })
                           }
                           title="คลิกเพื่อดูรูปภาพสแกนเข้าขนาดใหญ่"
@@ -982,7 +982,7 @@ export default function AttendancePage() {
                           onClick={() =>
                             setPreviewImage({
                               url: p.check_out_snapshot,
-                              title: `ภาพถ่ายสแกนออกงาน: ${p.name || ''} (${p.employee_id || '-'}) ${p.check_out_time ? 'เวลา ' + formatThaiTime(p.check_out_time) + ' น.' : ''}`,
+                              title: `ภาพถ่ายสแกนออกงาน: ${p.name || ''} (${p.employee_id || '-'}) ${p.check_out_time && p.status !== 'expired' && !p.adjustment_reason?.includes('หมดอายุ') ? 'เวลา ' + formatThaiTime(p.check_out_time) + ' น.' : ''}`,
                             })
                           }
                           title="คลิกเพื่อดูรูปภาพสแกนออกขนาดใหญ่"
@@ -1030,7 +1030,7 @@ export default function AttendancePage() {
                       )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
-                      {p.check_in_time ? (
+                      {p.check_in_time && p.status !== 'expired' && !p.adjustment_reason?.includes('หมดอายุ') ? (
                         <span style={{ fontWeight: 600, color: '#16a34a' }}>
                           {formatThaiTime(p.check_in_time)} น.
                         </span>
@@ -1039,7 +1039,7 @@ export default function AttendancePage() {
                       )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
-                      {p.check_out_time ? (
+                      {p.check_out_time && p.status !== 'expired' && !p.adjustment_reason?.includes('หมดอายุ') ? (
                         <span style={{ fontWeight: 600, color: '#2563eb' }}>
                           {formatThaiTime(p.check_out_time)} น.
                         </span>
