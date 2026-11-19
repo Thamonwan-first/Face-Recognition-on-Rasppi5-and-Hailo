@@ -282,13 +282,8 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 				isExpired = true
 			} else if u.EndDate != nil && strings.TrimSpace(*u.EndDate) != "" {
 				endStr := strings.TrimSpace(*u.EndDate)
-				if len(endStr) >= 10 {
-					if endD, err := time.Parse("2006-01-02", endStr[:10]); err == nil {
-						todayLoc, _ := time.ParseInLocation("2006-01-02", workDate, loc)
-						if todayLoc.After(endD) {
-							isExpired = true
-						}
-					}
+				if len(endStr) >= 10 && workDate > endStr[:10] {
+					isExpired = true
 				}
 			}
 		}
@@ -353,7 +348,7 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		// If event is OUT or AUTO, check if there is an existing pair today for this user
 		// To support First-In, Last-Out logic (re-scanning OUT updates checkout time)
 		if event.Direction == "OUT" || event.Direction == "AUTO" {
-			if lastPair, err := uc.attendanceRepo.FindLastPairByUserAndDate(ctx, event.UserID, workDate); err == nil && lastPair != nil {
+			if lastPair, err := uc.attendanceRepo.FindLastPairByUserAndDate(ctx, event.UserID, workDate); err == nil && lastPair != nil && lastPair.Status != "expired" {
 				if event.Direction == "OUT" || (event.Direction == "AUTO" && lastPair.CheckInEventID != nil) {
 					now := time.Now().UTC()
 					lastPair.UpdatedAt = now

@@ -121,7 +121,14 @@ type mockUserRepo struct {
 	users []*entity.User
 }
 
-func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*entity.User, error) { return nil, nil }
+func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*entity.User, error) {
+	for _, u := range m.users {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, entity.ErrNotFound
+}
 func (m *mockUserRepo) GetByEmployeeID(ctx context.Context, employeeID string) (*entity.User, error) {
 	return nil, nil
 }
@@ -268,6 +275,121 @@ func TestAttendanceUseCase_ProcessEvent_MultipleOuts(t *testing.T) {
 	if repo.pairs[0].HoursWorked == nil || *repo.pairs[0].HoursWorked < 7.9 {
 		t.Fatalf("expected updated hours worked ~8, got %v", repo.pairs[0].HoursWorked)
 	}
+}
+
+func TestAttendanceUseCase_ProcessEvent_ExpiredContract(t *testing.T) {
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	now := time.Date(2026, 11, 19, 8, 30, 0, 0, loc).UTC()
+
+	t.Run("direction EXPIRED creates pair with nil check-in/out times", func(t *testing.T) {
+		repo := &mockAttendanceRepo{}
+		uc := usecase.NewAttendanceUseCase(repo)
+
+		event1 := &entity.AttendanceEvent{
+			EventID:     "evt-exp-1",
+			UserID:      "user-exp-1",
+			Direction:   "EXPIRED",
+			SnapshotURL: "/uploads/snap1.jpg",
+			Notes:       "หมดอายุสัญญาจ้าง",
+			CreatedAt:   now,
+		}
+
+		err := uc.ProcessEvent(context.Background(), event1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if len(repo.pairs) != 1 {
+			t.Fatalf("expected 1 pair created, got %d", len(repo.pairs))
+		}
+		pair := repo.pairs[0]
+		if pair.Status != "expired" {
+			t.Fatalf("expected status 'expired', got %s", pair.Status)
+		}
+		if pair.CheckInEventID != nil {
+			t.Fatalf("expected nil CheckInEventID, got %v", *pair.CheckInEventID)
+		}
+		if pair.CheckOutEventID != nil {
+			t.Fatalf("expected nil CheckOutEventID, got %v", *pair.CheckOutEventID)
+		}
+		if pair.CheckInTime != nil {
+			t.Fatalf("expected nil CheckInTime, got %v", pair.CheckInTime)
+		}
+		if pair.CheckOutTime != nil {
+			t.Fatalf("expected nil CheckOutTime, got %v", pair.CheckOutTime)
+		}
+		if pair.HoursWorked != nil {
+			t.Fatalf("expected nil HoursWorked, got %v", *pair.HoursWorked)
+		}
+		if pair.CheckInSnapshot == nil || *pair.CheckInSnapshot != "/uploads/snap1.jpg" {
+			t.Fatalf("expected CheckInSnapshot to be preserved")
+		}
+
+		// Second scan on the same day: updates snapshot to CheckOutSnapshot without setting event IDs
+		event2 := &entity.AttendanceEvent{
+			EventID:     "evt-exp-2",
+			UserID:      "user-exp-1",
+			Direction:   "EXPIRED",
+			SnapshotURL: "/uploads/snap2.jpg",
+			Notes:       "หมดอายุสัญญาจ้าง",
+			CreatedAt:   now.Add(8 * time.Hour),
+		}
+		err = uc.ProcessEvent(context.Background(), event2)
+		if err != nil {
+			t.Fatalf("expected no error on second scan, got %v", err)
+		}
+
+		if len(repo.pairs) != 1 {
+			t.Fatalf("expected still 1 pair (no duplicates), got %d", len(repo.pairs))
+		}
+		pair2 := repo.pairs[0]
+		if pair2.CheckInEventID != nil || pair2.CheckOutEventID != nil {
+			t.Fatalf("expected event IDs to remain nil after second scan")
+		}
+		if pair2.CheckOutSnapshot == nil || *pair2.CheckOutSnapshot != "/uploads/snap2.jpg" {
+			t.Fatalf("expected CheckOutSnapshot to be populated on second scan")
+		}
+	})
+
+	t.Run("user with expired end_date is automatically treated as expired even without EXPIRED direction", func(t *testing.T) {
+		repo := &mockAttendanceRepo{}
+		expiredDate := "2026-11-10" // past date relative to now (2026-11-19)
+		userRepo := &mockUserRepo{
+			users: []*entity.User{
+				{
+					ID:      "user-past-contract",
+					Name:    "Past Worker",
+					Status:  "active",
+					EndDate: &expiredDate,
+				},
+			},
+		}
+		uc := usecase.NewAttendanceUseCase(repo, userRepo)
+
+		event := &entity.AttendanceEvent{
+			EventID:     "evt-past-1",
+			UserID:      "user-past-contract",
+			Direction:   "IN",
+			SnapshotURL: "/uploads/snap_past.jpg",
+			CreatedAt:   now,
+		}
+
+		err := uc.ProcessEvent(context.Background(), event)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if len(repo.pairs) != 1 {
+			t.Fatalf("expected 1 pair created, got %d", len(repo.pairs))
+		}
+		pair := repo.pairs[0]
+		if pair.Status != "expired" {
+			t.Fatalf("expected status 'expired', got %s", pair.Status)
+		}
+		if pair.CheckInEventID != nil || pair.CheckOutEventID != nil {
+			t.Fatalf("expected nil event IDs for expired user")
+		}
+	})
 }
 
 func TestAttendanceUseCase_CalculateStatus(t *testing.T) {
