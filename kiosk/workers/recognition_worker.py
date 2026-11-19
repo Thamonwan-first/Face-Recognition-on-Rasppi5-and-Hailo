@@ -215,11 +215,11 @@ class RecognitionWorker(QThread):
                             snapshot_b64 = crop_face_snapshot_b64(frame_rgb, (x1, y1, x2, y2))
 
                             if is_contract_expired:
-                                # พนักงานหมดอายุสัญญาจ้าง: แสดงการ์ดเตือนบนจอ และบันทึกประวัติพร้อมหมายเหตุส่งเข้าเว็บ
+                                # พนักงานหมดอายุสัญญาจ้าง: ส่งภาพถ่ายและข้อมูลเข้าเว็บ แต่ไม่บันทึกเวลาเข้า-ออก
                                 rec = self.db.record_attendance(
                                     user_id,
                                     conf,
-                                    self.current_direction,
+                                    "EXPIRED",
                                     self.config.device_id,
                                     self.config.debounce_seconds,
                                     clock_synced=self._is_clock_synced(),
@@ -232,7 +232,7 @@ class RecognitionWorker(QThread):
                                     self._recent_scans = {uid: t for uid, t in self._recent_scans.items() if t > cutoff}
 
                                 self.face_recognized.emit(name, conf, "EXPIRED", emp_id, dept, photo_path, True)
-                                logger.warning("⚠️ พนักงาน %s (%s) หมดอายุสัญญาจ้าง — บันทึกประวัติและส่งข้อมูลเข้าเว็บ (หมายเหตุ: หมดอายุสัญญาจ้าง)", name, emp_id)
+                                logger.warning("⚠️ พนักงาน %s (%s) หมดอายุสัญญาจ้าง — ส่งข้อมูลเข้าเว็บโดยไม่บันทึกเวลาเข้า-ออก (หมายเหตุ: หมดอายุสัญญาจ้าง)", name, emp_id)
                                 if self.on_attendance_recorded:
                                     try:
                                         self.on_attendance_recorded()

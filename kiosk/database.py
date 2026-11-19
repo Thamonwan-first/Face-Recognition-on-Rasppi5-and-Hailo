@@ -138,7 +138,7 @@ class Database:
             - If user has no scan recorded today -> 'IN' (First-In)
             - If user already scanned today -> 'OUT' (Last-Out)
         """
-        if default_dir in ("IN", "OUT"):
+        if default_dir in ("IN", "OUT", "EXPIRED"):
             return default_dir
 
         today_start_iso = datetime.now().astimezone().replace(
@@ -149,7 +149,7 @@ class Database:
         cursor.execute(
             """
             SELECT event_id FROM attendance_events
-            WHERE user_id = ? AND created_at >= ?
+            WHERE user_id = ? AND created_at >= ? AND direction IN ('IN', 'OUT')
             LIMIT 1
             """,
             (user_id, today_start_iso),

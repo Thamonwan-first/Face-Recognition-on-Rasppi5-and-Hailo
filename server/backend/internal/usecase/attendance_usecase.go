@@ -64,6 +64,9 @@ func CalculateAttendanceStatusWithConfig(checkInTime, checkOutTime *time.Time, h
 	if isManual {
 		return "adjusted"
 	}
+	if checkInTime == nil && checkOutTime == nil {
+		return "expired"
+	}
 	if checkInTime == nil {
 		return "incomplete"
 	}
@@ -269,6 +272,41 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 	// 2. Date string YYYY-MM-DD in local Thailand timezone (Asia/Bangkok = UTC+7)
 	loc := time.FixedZone("Asia/Bangkok", 7*3600)
 	workDate := event.CreatedAt.In(loc).Format("2006-01-02")
+
+	// Special handling for Expired Contracts:
+	// Do NOT record check-in or check-out times, but record snapshot and note so HR can audit on the web dashboard.
+	isExpired := event.Direction == "EXPIRED" || strings.Contains(event.Notes, "หมดอายุ")
+	if isExpired {
+		lastPair, _ := uc.attendanceRepo.FindLastPairByUserAndDate(ctx, event.UserID, workDate)
+		if lastPair != nil {
+			now := time.Now().UTC()
+			lastPair.UpdatedAt = now
+			if event.SnapshotURL != "" && (lastPair.CheckInSnapshot == nil || *lastPair.CheckInSnapshot == "") {
+				lastPair.CheckInSnapshot = &event.SnapshotURL
+			}
+			lastPair.Status = "expired"
+			if event.Notes != "" {
+				if lastPair.AdjustmentReason != "" && !strings.Contains(lastPair.AdjustmentReason, event.Notes) {
+					lastPair.AdjustmentReason = lastPair.AdjustmentReason + ", " + event.Notes
+				} else if lastPair.AdjustmentReason == "" {
+					lastPair.AdjustmentReason = event.Notes
+				}
+			}
+			return uc.attendanceRepo.SaveEventAndPair(ctx, event, lastPair, true)
+		}
+
+		newPair := &entity.AttendancePair{
+			UserID:           event.UserID,
+			WorkDate:         workDate,
+			CheckInEventID:   &event.EventID,
+			CheckInSnapshot:  &event.SnapshotURL,
+			Status:           "expired",
+			AdjustmentReason: event.Notes,
+			CreatedAt:        time.Now().UTC(),
+			UpdatedAt:        time.Now().UTC(),
+		}
+		return uc.attendanceRepo.SaveEventAndPair(ctx, event, newPair, false)
+	}
 
 	// 3. Update or Create Daily Attendance Pair
 	pair, err := uc.attendanceRepo.FindOpenPair(ctx, event.UserID, workDate)

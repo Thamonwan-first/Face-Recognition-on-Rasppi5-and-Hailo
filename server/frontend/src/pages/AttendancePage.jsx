@@ -456,6 +456,22 @@ export default function AttendancePage() {
   };
 
   const renderStatusBadge = (p) => {
+    if (p.status === 'expired' || (p.adjustment_reason && p.adjustment_reason.includes('หมดอายุ'))) {
+      return (
+        <span
+          style={{
+            padding: '0.25rem 0.6rem',
+            borderRadius: '20px',
+            fontSize: '0.8rem',
+            background: '#fee2e2',
+            color: '#dc2626',
+            fontWeight: 600,
+          }}
+        >
+          หมดอายุสัญญาจ้าง
+        </span>
+      );
+    }
     if (p.is_manual || p.status === 'adjusted') {
       return (
         <div>
