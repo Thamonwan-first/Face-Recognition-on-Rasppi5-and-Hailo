@@ -173,6 +173,28 @@ func (h *DeviceHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
+func (h *DeviceHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	var dto usecase.UpdateDeviceDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+	claims := c.MustGet(ContextAdminKey).(*token.Claims)
+	dev, err := h.deviceUC.Update(c.Request.Context(), claims.AdminID, id, &dto)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if h.broker != nil && dev != nil {
+		h.broker.Publish(broker.Event{
+			Type:    "device",
+			Payload: gin.H{"action": "updated", "device_id": dev.ID, "mode": dev.Mode, "name": dev.Name},
+		})
+	}
+	c.JSON(http.StatusOK, dev)
+}
+
 func (h *DeviceHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	claims := c.MustGet(ContextAdminKey).(*token.Claims)

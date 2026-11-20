@@ -27,9 +27,10 @@ def get_local_ip() -> str:
 
 
 class HeartbeatWorker:
-    def __init__(self, db_source, config):
+    def __init__(self, db_source, config, on_heartbeat_response=None):
         self.db_source = db_source
         self.config = config
+        self.on_heartbeat_response = on_heartbeat_response
         self.conn = None
         self._running = False
         self._thread = None
@@ -100,6 +101,11 @@ class HeartbeatWorker:
                 server_time_str = data.get("server_time")
                 if server_time_str:
                     self._check_and_sync_time(server_time_str)
+                if self.on_heartbeat_response and callable(self.on_heartbeat_response):
+                    try:
+                        self.on_heartbeat_response(data)
+                    except Exception as cb_err:
+                        logger.debug("on_heartbeat_response failed: %s", cb_err)
             logger.debug("Heartbeat sent successfully")
         except Exception as e:
             logger.debug("Heartbeat server unreachable: %s", e)

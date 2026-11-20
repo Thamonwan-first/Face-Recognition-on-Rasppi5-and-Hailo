@@ -222,6 +222,22 @@ func (r *deviceRepo) Create(ctx context.Context, device *entity.Device) error {
 	return nil
 }
 
+func (r *deviceRepo) Update(ctx context.Context, device *entity.Device) error {
+	if device.Mode == "" {
+		device.Mode = "attendance"
+	}
+	if device.Direction == "" {
+		device.Direction = "AUTO"
+	}
+	query := `
+	UPDATE devices
+	SET name = $1, location = $2, direction = $3, mode = $4
+	WHERE id = $5
+	`
+	_, err := r.db.ExecContext(ctx, query, device.Name, device.Location, device.Direction, device.Mode, device.ID)
+	return err
+}
+
 func (r *deviceRepo) UpdateMode(ctx context.Context, id string, mode string) error {
 	if mode == "" {
 		mode = "attendance"

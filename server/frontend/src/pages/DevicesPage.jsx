@@ -23,6 +23,16 @@ export default function DevicesPage() {
   const [copied, setCopied] = useState(false);
   const [copiedEnv, setCopiedEnv] = useState(false);
 
+  // Edit Device State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingDevice, setEditingDevice] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    location: '',
+    direction: 'AUTO',
+    mode: 'attendance',
+  });
+
   // Fetch devices status list with auto-refresh every 3 seconds
   const { data: devices, isLoading, error } = useQuery({
     queryKey: ['devices'],
@@ -71,6 +81,36 @@ export default function DevicesPage() {
       alert('เกิดข้อผิดพลาดในการเปลี่ยนโหมดอุปกรณ์: ' + (err.message || err));
     },
   });
+
+  // Mutation: Update full device info
+  const updateDeviceMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/api/devices/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      setShowEditModal(false);
+      setEditingDevice(null);
+    },
+    onError: (err) => {
+      alert('เกิดข้อผิดพลาดในการแก้ไขอุปกรณ์: ' + (err.message || err));
+    },
+  });
+
+  const handleOpenEdit = (device) => {
+    setEditingDevice(device);
+    setEditFormData({
+      name: device.name || '',
+      location: device.location || '',
+      direction: device.direction || 'AUTO',
+      mode: device.mode || 'attendance',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    if (!editingDevice) return;
+    updateDeviceMutation.mutate({ id: editingDevice.id, data: editFormData });
+  };
 
   const handleRegisterSubmit = (e) => {
     e.preventDefault();
@@ -214,7 +254,30 @@ export default function DevicesPage() {
               </li>
             </ul>
 
-            <div style={{ borderTop: '1px solid var(--border-color, #e5e7eb)', paddingTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ borderTop: '1px solid var(--border-color, #e5e7eb)', paddingTop: '0.75rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <button
+                type="button"
+                style={{
+                  fontSize: '0.82rem',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#334155',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontWeight: 500,
+                  transition: 'background-color 0.15s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                onClick={() => handleOpenEdit(device)}
+              >
+                แก้ไขข้อมูล
+              </button>
               <button
                 className="btn btn-danger"
                 style={{
@@ -471,6 +534,108 @@ export default function DevicesPage() {
                 ปิดหน้าต่าง
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: แก้ไขข้อมูลอุปกรณ์ */}
+      {showEditModal && editingDevice && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div className="login-card" style={{ maxWidth: '500px', width: '92%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginBottom: '1.25rem', fontSize: '1.2rem', color: 'var(--text-primary)' }}>
+              แก้ไขข้อมูลอุปกรณ์
+            </h3>
+
+            <form onSubmit={handleEditSubmit}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>รหัสอุปกรณ์ (ID)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={editingDevice.id}
+                  disabled
+                  style={{ background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>ชื่ออุปกรณ์ *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="เช่น ตู้สแกนหน้าประตู 1"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>สถานที่ติดตั้ง</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="เช่น อาคาร A ชั้น 1 หรือ ห้องประชุม 1"
+                  value={editFormData.location}
+                  onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>ทิศทางการบันทึก (Direction)</label>
+                <select
+                  className="form-control"
+                  value={editFormData.direction}
+                  onChange={(e) => setEditFormData({ ...editFormData, direction: e.target.value })}
+                >
+                  <option value="AUTO">AUTO (ระบบตรวจจับเข้า/ออกอัตโนมัติ)</option>
+                  <option value="IN">IN (บันทึกเวลาเข้าเท่านั้น)</option>
+                  <option value="OUT">OUT (บันทึกเวลาออกเท่านั้น)</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>โหมดการทำงาน (Mode)</label>
+                <select
+                  className="form-control"
+                  value={editFormData.mode}
+                  onChange={(e) => setEditFormData({ ...editFormData, mode: e.target.value })}
+                >
+                  <option value="attendance">ลงเวลาทำงาน (Attendance)</option>
+                  <option value="meeting">ห้องประชุม (Meeting)</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingDevice(null);
+                  }}
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={updateDeviceMutation.isPending}
+                >
+                  {updateDeviceMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

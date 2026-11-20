@@ -124,6 +124,15 @@ func (m *mockDeviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 	return m.devices, nil
 }
 func (m *mockDeviceRepo) Create(ctx context.Context, device *entity.Device) error { return nil }
+func (m *mockDeviceRepo) Update(ctx context.Context, device *entity.Device) error {
+	for i, d := range m.devices {
+		if d.ID == device.ID {
+			m.devices[i] = device
+			return nil
+		}
+	}
+	return nil
+}
 func (m *mockDeviceRepo) UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error {
 	return nil
 }

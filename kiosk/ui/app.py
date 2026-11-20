@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 import numpy as np
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap, QFont, QColor, QFontDatabase, QPainter, QPainterPath, QBrush, QPen
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel,
@@ -221,6 +221,8 @@ class AttendanceSuccessPopup(QDialog):
 
 
 class MainWindow(QMainWindow):
+    meeting_updated = pyqtSignal(dict, str)
+
     """
     Kiosk Screen:
     - กล้องสดไร้ขอบ ขยายเต็มหน้าจอ (Full-Screen Camera)
@@ -236,6 +238,7 @@ class MainWindow(QMainWindow):
         self.db = database
         self.on_attendance_recorded = on_attendance_recorded
         self.current_direction = config.device_direction
+        self.current_mode = getattr(config, 'device_mode', 'attendance')
         self._active_popup = None
 
         self.setWindowTitle("Face Attendance Kiosk")
@@ -256,7 +259,9 @@ class MainWindow(QMainWindow):
         self._cursor_timer.setSingleShot(True)
         self._cursor_timer.timeout.connect(self._hide_cursor)
 
+        self.meeting_updated.connect(self._on_meeting_updated)
         self._build_ui()
+        self.update_meeting_display()
         self._start_clock()
         self._start_worker()
 
@@ -317,6 +322,21 @@ class MainWindow(QMainWindow):
         self.date_label.setStyleSheet(f"color: {TEXT_SECONDARY}; border: none; background: transparent;")
         t_layout.addWidget(self.date_label)
 
+        # ── 1.1 วาระการประชุม (เฉพาะโหมดเข้าประชุม) — ตัวหนังสือล้วน ไม่มีกรอบ โทนสีครีมมินิมอล ──
+        self.meeting_title_label = QLabel("")
+        self.meeting_title_label.setFont(QFont(FONT_FAMILY, 14, QFont.DemiBold))
+        self.meeting_title_label.setAlignment(Qt.AlignCenter)
+        self.meeting_title_label.setStyleSheet(f"color: {TEXT_PRIMARY}; border: none; background: transparent; padding-top: 4px;")
+        self.meeting_title_label.setWordWrap(True)
+        t_layout.addWidget(self.meeting_title_label)
+
+        self.meeting_sub_label = QLabel("")
+        self.meeting_sub_label.setFont(QFont(FONT_FAMILY, 11))
+        self.meeting_sub_label.setAlignment(Qt.AlignCenter)
+        self.meeting_sub_label.setStyleSheet(f"color: {TEXT_MUTED}; border: none; background: transparent;")
+        self.meeting_sub_label.setWordWrap(True)
+        t_layout.addWidget(self.meeting_sub_label)
+
         layout.addWidget(time_bar)
 
         # ── 2. หน้าจอกล้องสดเต็มจอ (Full-Screen Borderless Camera) ──
@@ -340,6 +360,44 @@ class MainWindow(QMainWindow):
         thai_m = THAI_MONTHS[now.month] if 1 <= now.month <= 12 else ""
         day_name = THAI_DAYS[now.weekday()]
         self.date_label.setText(f"{day_name}ที่ {now.day} {thai_m} {now.year + 543}")
+
+    @pyqtSlot(dict, str)
+    def _on_meeting_updated(self, active_meeting, mode):
+        self.update_meeting_display(active_meeting, mode)
+
+    def update_meeting_display(self, active_meeting=None, mode=None):
+        """อัปเดตการแสดงผลชื่อวาระการประชุมในโหมดเข้าประชุม โดยไม่ใช้กรอบสี่เหลี่ยม"""
+        if mode:
+            self.current_mode = mode
+        else:
+            self.current_mode = getattr(self.config, 'device_mode', 'attendance')
+
+        if self.current_mode == "meeting":
+            if active_meeting and isinstance(active_meeting, dict) and active_meeting.get("title"):
+                title = active_meeting.get("title", "").strip()
+                loc = active_meeting.get("location", "").strip()
+                st = active_meeting.get("start_time", "").strip()
+                et = active_meeting.get("end_time", "").strip()
+                sub_parts = []
+                if loc:
+                    sub_parts.append(loc)
+                if st and et:
+                    sub_parts.append(f"เวลา {st} - {et} น.")
+                elif st:
+                    sub_parts.append(f"เวลา {st} น.")
+                sub_text = " • ".join(sub_parts)
+            else:
+                fallback_title = getattr(self.config, 'meeting_title', '').strip()
+                title = fallback_title if fallback_title else "ไม่มีวาระการประชุมในขณะนี้"
+                sub_text = getattr(self.config, 'meeting_time', '').strip()
+
+            self.meeting_title_label.setText(title)
+            self.meeting_sub_label.setText(sub_text)
+            self.meeting_title_label.setVisible(bool(title))
+            self.meeting_sub_label.setVisible(bool(sub_text))
+        else:
+            self.meeting_title_label.setVisible(False)
+            self.meeting_sub_label.setVisible(False)
 
     def _start_worker(self):
         self.worker = RecognitionWorker(
@@ -389,7 +447,7 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str, float, str, str, str, str, bool)
     def _on_recognized(self, name, conf, direction, emp_id, division, photo_path, is_expired):
         """เมื่อสแกนเจอพนักงาน: แสดง Floating Glass Card ตรงกลางจอ พร้อมรูปโปรไฟล์"""
-        is_meeting = getattr(self.config, 'device_mode', 'attendance') == 'meeting'
+        is_meeting = getattr(self, 'current_mode', getattr(self.config, 'device_mode', 'attendance')) == 'meeting'
         dir_text = "เข้าประชุม" if is_meeting else ("เข้างาน" if direction == "IN" else "ออกงาน")
         now_time = datetime.now().strftime("%H:%M:%S")
 

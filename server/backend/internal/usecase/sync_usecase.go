@@ -16,6 +16,7 @@ type SyncUseCase struct {
 	userRepo       ports.UserRepository
 	attendanceUC   *AttendanceUseCase
 	enrollmentRepo ports.EnrollmentRepository
+	meetingRepo    ports.MeetingRepository
 }
 
 func NewSyncUseCase(
@@ -30,6 +31,34 @@ func NewSyncUseCase(
 		attendanceUC:   attendanceUC,
 		enrollmentRepo: enrollmentRepo,
 	}
+}
+
+func (uc *SyncUseCase) SetMeetingRepo(repo ports.MeetingRepository) {
+	uc.meetingRepo = repo
+}
+
+func (uc *SyncUseCase) GetActiveMeeting(ctx context.Context, deviceID string) (*entity.Meeting, error) {
+	if uc.meetingRepo == nil || deviceID == "" {
+		return nil, nil
+	}
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	now := time.Now().In(loc)
+	dateStr := now.Format("2006-01-02")
+	timeStr := now.Format("15:04")
+
+	m, err := uc.meetingRepo.FindActiveMeetingByDevice(ctx, deviceID, dateStr, timeStr)
+	if err == nil && m != nil {
+		return m, nil
+	}
+	meetings, err := uc.meetingRepo.List(ctx, dateStr, "", deviceID)
+	if err == nil {
+		for _, meeting := range meetings {
+			if meeting.Status == "ongoing" || meeting.Status == "scheduled" {
+				return meeting, nil
+			}
+		}
+	}
+	return nil, nil
 }
 
 type HeartbeatDTO struct {

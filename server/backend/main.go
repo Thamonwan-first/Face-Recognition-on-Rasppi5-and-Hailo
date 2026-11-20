@@ -72,6 +72,7 @@ func main() {
 	enrollmentUC := usecase.NewEnrollmentUseCase(enrollmentRepo, userRepo, uploadDir, auditRepo, deviceRepo)
 	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo, auditRepo, userRepo, settingsRepo, deviceRepo, meetingUC, enrollmentUC)
 	syncUC := usecase.NewSyncUseCase(deviceRepo, userRepo, attendanceUC, enrollmentRepo)
+	syncUC.SetMeetingRepo(meetingRepo)
 	auditUC := usecase.NewAuditUseCase(auditRepo)
 	settingsUC := usecase.NewSettingsUseCase(settingsRepo, auditRepo)
 

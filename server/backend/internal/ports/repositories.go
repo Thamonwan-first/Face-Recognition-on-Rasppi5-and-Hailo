@@ -23,6 +23,7 @@ type DeviceRepository interface {
 	GetByApiKeyHash(ctx context.Context, hash string) (*entity.Device, error)
 	List(ctx context.Context) ([]*entity.Device, error)
 	Create(ctx context.Context, device *entity.Device) error
+	Update(ctx context.Context, device *entity.Device) error
 	UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error
 	UpdateIPAddress(ctx context.Context, id string, ip string) error
 	UpdateStatusAndIP(ctx context.Context, id string, status string, ip string, lastSeen time.Time) error

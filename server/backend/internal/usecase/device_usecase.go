@@ -163,6 +163,54 @@ func (uc *DeviceUseCase) Delete(ctx context.Context, adminID, id string) error {
 	return nil
 }
 
+type UpdateDeviceDTO struct {
+	Name      string `json:"name"`
+	Location  string `json:"location"`
+	Direction string `json:"direction"`
+	Mode      string `json:"mode"`
+}
+
+func (uc *DeviceUseCase) Update(ctx context.Context, adminID, id string, dto *UpdateDeviceDTO) (*entity.Device, error) {
+	device, err := uc.deviceRepo.GetByID(ctx, id)
+	if err != nil || device == nil {
+		return nil, fmt.Errorf("device not found: %s", id)
+	}
+
+	if dto.Name != "" {
+		device.Name = dto.Name
+	}
+	if dto.Location != "" {
+		device.Location = dto.Location
+	}
+	if dto.Direction != "" {
+		device.Direction = dto.Direction
+	}
+	if dto.Mode != "" {
+		if dto.Mode != "attendance" && dto.Mode != "meeting" {
+			dto.Mode = "attendance"
+		}
+		device.Mode = dto.Mode
+	}
+
+	if err := uc.deviceRepo.Update(ctx, device); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	if uc.auditRepo != nil {
+		_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
+			AdminID:    &adminID,
+			Action:     "device.update",
+			TargetType: "device",
+			TargetID:   id,
+			Detail:     fmt.Sprintf("แก้ไขข้อมูลอุปกรณ์: %s (โหมด: %s)", device.Name, device.Mode),
+			CreatedAt:  now,
+		})
+	}
+
+	return device, nil
+}
+
 func (uc *DeviceUseCase) UpdateIP(ctx context.Context, id, ip string) error {
 	if id == "" || ip == "" {
 		return nil

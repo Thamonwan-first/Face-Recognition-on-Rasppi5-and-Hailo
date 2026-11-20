@@ -128,10 +128,23 @@ func (h *SyncHandler) Heartbeat(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"status":      "ok",
 		"server_time": time.Now().UTC().Format(time.RFC3339),
-	})
+		"device_mode": device.Mode,
+	}
+
+	if activeM, _ := h.syncUC.GetActiveMeeting(c.Request.Context(), device.ID); activeM != nil {
+		resp["active_meeting"] = gin.H{
+			"id":         activeM.ID,
+			"title":      activeM.Title,
+			"location":   activeM.Location,
+			"start_time": activeM.StartTime,
+			"end_time":   activeM.EndTime,
+		}
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *SyncHandler) SyncUsers(c *gin.Context) {

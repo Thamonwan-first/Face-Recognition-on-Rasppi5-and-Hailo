@@ -104,6 +104,7 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 			devices.GET("", handlers.Device.List)
 			devices.GET("/status", handlers.Device.List)
 			devices.POST("", handlers.Device.Register)
+			devices.PUT("/:id", handlers.Device.Update)
 			devices.PUT("/:id/mode", handlers.Device.UpdateMode)
 			devices.DELETE("/:id", handlers.Device.Delete)
 		}
