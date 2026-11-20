@@ -176,20 +176,25 @@ func (uc *DeviceUseCase) Update(ctx context.Context, adminID, id string, dto *Up
 		return nil, fmt.Errorf("device not found: %s", id)
 	}
 
-	if dto.Name != "" {
-		device.Name = dto.Name
+	trimmedName := strings.TrimSpace(dto.Name)
+	if trimmedName != "" {
+		device.Name = trimmedName
 	}
-	if dto.Location != "" {
-		device.Location = dto.Location
-	}
+	device.Location = strings.TrimSpace(dto.Location)
+
 	if dto.Direction != "" {
-		device.Direction = dto.Direction
-	}
-	if dto.Mode != "" {
-		if dto.Mode != "attendance" && dto.Mode != "meeting" {
-			dto.Mode = "attendance"
+		dir := strings.ToUpper(strings.TrimSpace(dto.Direction))
+		if dir == "IN" || dir == "OUT" || dir == "AUTO" {
+			device.Direction = dir
 		}
-		device.Mode = dto.Mode
+	}
+
+	if dto.Mode != "" {
+		mode := strings.ToLower(strings.TrimSpace(dto.Mode))
+		if mode != "attendance" && mode != "meeting" {
+			mode = "attendance"
+		}
+		device.Mode = mode
 	}
 
 	if err := uc.deviceRepo.Update(ctx, device); err != nil {

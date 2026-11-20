@@ -134,13 +134,15 @@ func (h *SyncHandler) Heartbeat(c *gin.Context) {
 		"device_mode": device.Mode,
 	}
 
-	if activeM, _ := h.syncUC.GetActiveMeeting(c.Request.Context(), device.ID); activeM != nil {
-		resp["active_meeting"] = gin.H{
-			"id":         activeM.ID,
-			"title":      activeM.Title,
-			"location":   activeM.Location,
-			"start_time": activeM.StartTime,
-			"end_time":   activeM.EndTime,
+	if device.Mode == "meeting" {
+		if activeM, _ := h.syncUC.GetActiveMeeting(c.Request.Context(), device.ID); activeM != nil {
+			resp["active_meeting"] = gin.H{
+				"id":         activeM.ID,
+				"title":      activeM.Title,
+				"location":   activeM.Location,
+				"start_time": activeM.StartTime,
+				"end_time":   activeM.EndTime,
+			}
 		}
 	}
 
