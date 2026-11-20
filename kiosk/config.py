@@ -57,6 +57,7 @@ class KioskConfig:
     device_id: str = os.getenv("DEVICE_ID") or _RAW.get("device", {}).get("id", "kiosk-01")
     device_name: str = os.getenv("DEVICE_NAME") or _RAW.get("device", {}).get("name", "ตู้บันทึกเวลา")
     device_direction: str = os.getenv("DEVICE_DIRECTION") or _RAW.get("device", {}).get("direction", "AUTO")
+    device_mode: str = os.getenv("DEVICE_MODE") or _RAW.get("device", {}).get("mode", "attendance")
 
     server_url: str = os.getenv("SERVER_URL") or _RAW.get("server", {}).get("url", "https://localhost:8443")
     api_key: str = os.getenv("API_KEY") or _RAW.get("server", {}).get("api_key", "")

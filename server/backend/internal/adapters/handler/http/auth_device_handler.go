@@ -190,3 +190,26 @@ func (h *DeviceHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 }
+
+func (h *DeviceHandler) UpdateMode(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Mode string `json:"mode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		return
+	}
+	claims := c.MustGet(ContextAdminKey).(*token.Claims)
+	if err := h.deviceUC.UpdateMode(c.Request.Context(), claims.AdminID, id, req.Mode); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if h.broker != nil {
+		h.broker.Publish(broker.Event{
+			Type:    "device",
+			Payload: gin.H{"action": "mode_updated", "device_id": id, "mode": req.Mode},
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "mode": req.Mode})
+}

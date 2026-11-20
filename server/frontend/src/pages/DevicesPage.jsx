@@ -61,6 +61,17 @@ export default function DevicesPage() {
     },
   });
 
+  // Mutation: Update device mode
+  const updateModeMutation = useMutation({
+    mutationFn: ({ id, mode }) => api.put(`/api/devices/${id}/mode`, { mode }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+    onError: (err) => {
+      alert('เกิดข้อผิดพลาดในการเปลี่ยนโหมดอุปกรณ์: ' + (err.message || err));
+    },
+  });
+
   const handleRegisterSubmit = (e) => {
     e.preventDefault();
     if (!formData.id.trim()) {
@@ -177,6 +188,26 @@ export default function DevicesPage() {
               </li>
               <li>
                 <strong>คิวรอส่ง (Outbox):</strong> {device.outbox_pending || 0} รายการ
+              </li>
+              <li>
+                <strong>โหมดการทำงาน:</strong>{' '}
+                <select
+                  value={device.mode || 'attendance'}
+                  onChange={(e) => updateModeMutation.mutate({ id: device.id, mode: e.target.value })}
+                  style={{
+                    padding: '0.2rem 0.5rem',
+                    fontSize: '0.85rem',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: device.mode === 'meeting' ? '#f5f3ff' : '#f0fdf4',
+                    color: device.mode === 'meeting' ? '#6d28d9' : '#15803d',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="attendance">ลงเวลาทำงาน</option>
+                  <option value="meeting">ห้องประชุม</option>
+                </select>
               </li>
               <li>
                 <strong>ออนไลน์ล่าสุด:</strong> {formatThaiDateTime(device.last_seen, 'ไม่เคย')}

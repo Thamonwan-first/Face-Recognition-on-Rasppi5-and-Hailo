@@ -208,6 +208,40 @@ func createSchema(db *sql.DB) error {
 		updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);
 
+	-- Migration: add mode to devices
+	ALTER TABLE devices ADD COLUMN IF NOT EXISTS mode VARCHAR(32) DEFAULT 'attendance';
+
+	-- Meetings and Attendees tables
+	CREATE TABLE IF NOT EXISTS meetings (
+		id VARCHAR(64) PRIMARY KEY,
+		title VARCHAR(255) NOT NULL,
+		description TEXT DEFAULT '',
+		location VARCHAR(128) DEFAULT '',
+		device_id VARCHAR(64) REFERENCES devices(id) ON DELETE SET NULL,
+		meeting_date DATE NOT NULL,
+		start_time VARCHAR(8) NOT NULL,
+		end_time VARCHAR(8) NOT NULL,
+		late_threshold_minutes INT DEFAULT 15,
+		status VARCHAR(32) DEFAULT 'scheduled',
+		created_by VARCHAR(64) DEFAULT '',
+		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS meeting_attendees (
+		id SERIAL PRIMARY KEY,
+		meeting_id VARCHAR(64) NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+		user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		event_id VARCHAR(64),
+		scanned_at TIMESTAMPTZ NOT NULL,
+		snapshot_url VARCHAR(255) DEFAULT '',
+		status VARCHAR(32) DEFAULT 'on_time',
+		minutes_late INT DEFAULT 0,
+		notes TEXT DEFAULT '',
+		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(meeting_id, user_id)
+	);
+
 	-- Performance Indexes for O(1) and O(log N) lookups
 	CREATE INDEX IF NOT EXISTS idx_pg_devices_api_key_hash ON devices(api_key_hash);
 	CREATE INDEX IF NOT EXISTS idx_pg_users_version ON users(version);
@@ -217,6 +251,8 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_pg_attendance_events_user_created ON attendance_events(user_id, created_at);
 	CREATE INDEX IF NOT EXISTS idx_pg_unrecognized_created ON unrecognized_scans(created_at);
 	CREATE INDEX IF NOT EXISTS idx_pg_unrecognized_status ON unrecognized_scans(status);
+	CREATE INDEX IF NOT EXISTS idx_pg_meetings_device_date ON meetings(device_id, meeting_date);
+	CREATE INDEX IF NOT EXISTS idx_pg_meeting_attendees_meeting_user ON meeting_attendees(meeting_id, user_id);
 	`
 	_, err := db.Exec(schema)
 	return err

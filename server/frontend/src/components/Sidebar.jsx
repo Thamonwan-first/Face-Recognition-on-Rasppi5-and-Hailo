@@ -46,6 +46,11 @@ export default function Sidebar() {
             <NavLink to="/attendance">ประวัติการลงเวลา</NavLink>
           </li>
         )}
+        {(hasPerm('attendance') || hasPerm('meetings')) && (
+          <li>
+            <NavLink to="/meetings">การประชุม</NavLink>
+          </li>
+        )}
         {hasPerm('audit') && (
           <li>
             <NavLink to="/audit">บันทึกประวัติการใช้งาน</NavLink>

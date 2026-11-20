@@ -8,6 +8,7 @@ import DevicesPage from './pages/DevicesPage';
 import UsersPage from './pages/UsersPage';
 import EnrollmentPage from './pages/EnrollmentPage';
 import AttendancePage from './pages/AttendancePage';
+import MeetingsPage from './pages/MeetingsPage';
 import AuditPage from './pages/AuditPage';
 import AdminsPage from './pages/AdminsPage';
 import SettingsPage from './pages/SettingsPage';
@@ -26,6 +27,7 @@ function DashboardLayout() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/enrollment" element={<EnrollmentPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
+          <Route path="/meetings" element={<MeetingsPage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/admins" element={<AdminsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

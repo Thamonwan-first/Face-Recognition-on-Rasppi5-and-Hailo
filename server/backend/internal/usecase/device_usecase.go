@@ -169,3 +169,22 @@ func (uc *DeviceUseCase) UpdateIP(ctx context.Context, id, ip string) error {
 	}
 	return uc.deviceRepo.UpdateIPAddress(ctx, id, ip)
 }
+
+func (uc *DeviceUseCase) UpdateMode(ctx context.Context, adminID, id, mode string) error {
+	if mode != "attendance" && mode != "meeting" {
+		mode = "attendance"
+	}
+	if err := uc.deviceRepo.UpdateMode(ctx, id, mode); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	_ = uc.auditRepo.Log(ctx, &entity.AuditLog{
+		AdminID:    &adminID,
+		Action:     "device.update_mode",
+		TargetType: "device",
+		TargetID:   id,
+		Detail:     fmt.Sprintf("เปลี่ยนโหมดเครื่องเป็น %s", mode),
+		CreatedAt:  now,
+	})
+	return nil
+}

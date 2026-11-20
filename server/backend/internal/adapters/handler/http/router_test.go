@@ -125,6 +125,13 @@ func (m *mockDeviceRepo) UpdateState(ctx context.Context, state *entity.DeviceSt
 	return nil
 }
 
+func (m *mockDeviceRepo) UpdateMode(ctx context.Context, id string, mode string) error {
+	if m.device != nil && m.device.ID == id {
+		m.device.Mode = mode
+	}
+	return nil
+}
+
 func (m *mockDeviceRepo) Delete(ctx context.Context, id string) error {
 	m.device = nil
 	return nil

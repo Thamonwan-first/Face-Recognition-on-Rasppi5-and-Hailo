@@ -100,7 +100,7 @@ class AttendanceSuccessPopup(QDialog):
     เงาฟุ้งนุ่มนวล ขอบมนเรียบหรู พร้อมรูปโปรไฟล์พนักงาน ปิดเองอัตโนมัติใน 2.5 วินาที
     รองรับสถานะสำเร็จ หรือแจ้งเตือนหมดอายุสัญญาจ้าง
     """
-    def __init__(self, parent, name, direction_text, time_str, emp_id="", division="", photo_path="", is_expired=False):
+    def __init__(self, parent, name, direction_text, time_str, emp_id="", division="", photo_path="", is_expired=False, is_meeting=False):
         super().__init__(parent)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -110,7 +110,12 @@ class AttendanceSuccessPopup(QDialog):
         outer.setContentsMargins(12, 12, 12, 12)
 
         card = QFrame(self)
-        border_color = "#FCA5A5" if is_expired else CARD_BORDER
+        if is_expired:
+            border_color = "#FCA5A5"
+        elif is_meeting:
+            border_color = "#93C5FD"
+        else:
+            border_color = CARD_BORDER
         card.setStyleSheet(
             f"""
             QFrame {{
@@ -133,8 +138,16 @@ class AttendanceSuccessPopup(QDialog):
         layout.setSpacing(4)
 
         # 1. หัวข้อสถานะ
-        title_text = "หมดอายุสัญญาจ้าง" if is_expired else "บันทึกเวลาสำเร็จ"
-        title_color = "#DC2626" if is_expired else ACCENT_SUCCESS
+        if is_expired:
+            title_text = "หมดอายุสัญญาจ้าง"
+            title_color = "#DC2626"
+        elif is_meeting:
+            title_text = "ลงทะเบียนเข้าประชุมสำเร็จ"
+            title_color = "#1D4ED8"
+        else:
+            title_text = "บันทึกเวลาสำเร็จ"
+            title_color = ACCENT_SUCCESS
+
         title = QLabel(title_text)
         title.setFont(QFont(FONT_FAMILY, 13, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
@@ -179,6 +192,9 @@ class AttendanceSuccessPopup(QDialog):
         if is_expired:
             time_lbl = QLabel(f"ไม่บันทึกเวลาเข้า-ออก • เวลา {time_str} น.")
             time_lbl.setStyleSheet(f"color: #DC2626; border: none; background: transparent; font-weight: bold;")
+        elif is_meeting:
+            time_lbl = QLabel(f"ลงชื่อเข้าร่วมประชุม • เวลา {time_str} น.")
+            time_lbl.setStyleSheet(f"color: #1D4ED8; border: none; background: transparent; font-weight: bold;")
         else:
             time_lbl = QLabel(f"บันทึก: {direction_text} • เวลา {time_str} น.")
             time_lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; border: none; background: transparent;")
@@ -373,7 +389,8 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str, float, str, str, str, str, bool)
     def _on_recognized(self, name, conf, direction, emp_id, division, photo_path, is_expired):
         """เมื่อสแกนเจอพนักงาน: แสดง Floating Glass Card ตรงกลางจอ พร้อมรูปโปรไฟล์"""
-        dir_text = "เข้างาน" if direction == "IN" else "ออกงาน"
+        is_meeting = getattr(self.config, 'device_mode', 'attendance') == 'meeting'
+        dir_text = "เข้าประชุม" if is_meeting else ("เข้างาน" if direction == "IN" else "ออกงาน")
         now_time = datetime.now().strftime("%H:%M:%S")
 
         # ปิดป๊อปอัปเดิมถ้ายังค้างอยู่
@@ -385,7 +402,7 @@ class MainWindow(QMainWindow):
 
         # แสดง Floating Glass Card ตรงกลางจอ
         self._active_popup = AttendanceSuccessPopup(
-            self, name, dir_text, now_time, emp_id=emp_id, division=division, photo_path=photo_path, is_expired=is_expired
+            self, name, dir_text, now_time, emp_id=emp_id, division=division, photo_path=photo_path, is_expired=is_expired, is_meeting=is_meeting
         )
         self._active_popup.show()
         self._active_popup.raise_()

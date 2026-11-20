@@ -27,6 +27,7 @@ type DeviceRepository interface {
 	UpdateIPAddress(ctx context.Context, id string, ip string) error
 	UpdateStatusAndIP(ctx context.Context, id string, status string, ip string, lastSeen time.Time) error
 	UpdateState(ctx context.Context, state *entity.DeviceState) error
+	UpdateMode(ctx context.Context, id string, mode string) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -80,4 +81,17 @@ type EnrollmentRepository interface {
 type AuditRepository interface {
 	Log(ctx context.Context, log *entity.AuditLog) error
 	List(ctx context.Context, limit int) ([]*entity.AuditLog, error)
+}
+
+type MeetingRepository interface {
+	Create(ctx context.Context, meeting *entity.Meeting) error
+	Update(ctx context.Context, meeting *entity.Meeting) error
+	GetByID(ctx context.Context, id string) (*entity.Meeting, error)
+	List(ctx context.Context, date string, status string, deviceID string) ([]*entity.Meeting, error)
+	Delete(ctx context.Context, id string) error
+	FindActiveMeetingByDevice(ctx context.Context, deviceID string, date string, timeStr string) (*entity.Meeting, error)
+
+	RecordAttendee(ctx context.Context, attendee *entity.MeetingAttendee) error
+	ListAttendees(ctx context.Context, meetingID string) ([]*entity.MeetingAttendee, error)
+	GetAttendee(ctx context.Context, meetingID string, userID string) (*entity.MeetingAttendee, error)
 }

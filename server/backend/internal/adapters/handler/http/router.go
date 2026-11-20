@@ -15,6 +15,7 @@ type Handlers struct {
 	Auth       *AuthHandler
 	User       *UserHandler
 	Attendance *AttendanceHandler
+	Meeting    *MeetingHandler
 	Device     *DeviceHandler
 	Sync       *SyncHandler
 	Enrollment *EnrollmentHandler
@@ -103,7 +104,22 @@ func SetupRouter(handlers *Handlers, tokenMaker *token.TokenMaker, deviceUC *use
 			devices.GET("", handlers.Device.List)
 			devices.GET("/status", handlers.Device.List)
 			devices.POST("", handlers.Device.Register)
+			devices.PUT("/:id/mode", handlers.Device.UpdateMode)
 			devices.DELETE("/:id", handlers.Device.Delete)
+		}
+
+		// Meetings
+		if handlers.Meeting != nil {
+			meetings := api.Group("/meetings")
+			meetings.Use(adminAuth)
+			{
+				meetings.GET("", handlers.Meeting.List)
+				meetings.POST("", handlers.Meeting.Create)
+				meetings.GET("/:id", handlers.Meeting.Get)
+				meetings.PUT("/:id", handlers.Meeting.Update)
+				meetings.DELETE("/:id", handlers.Meeting.Delete)
+				meetings.GET("/:id/attendees", handlers.Meeting.ListAttendees)
+			}
 		}
 
 		// Enrollment (Dashboard admin upload)

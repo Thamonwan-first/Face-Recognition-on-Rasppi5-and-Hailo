@@ -108,12 +108,12 @@ func NewDeviceRepository(db *sql.DB) ports.DeviceRepository {
 }
 
 func (r *deviceRepo) GetByID(ctx context.Context, id string) (*entity.Device, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, ip_address, last_seen, created_at, revoked_at FROM devices WHERE id = $1", id)
+	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, COALESCE(mode, 'attendance'), api_key_hash, status, ip_address, last_seen, created_at, revoked_at FROM devices WHERE id = $1", id)
 	return scanDeviceRow(row)
 }
 
 func (r *deviceRepo) GetByApiKeyHash(ctx context.Context, hash string) (*entity.Device, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, api_key_hash, status, ip_address, last_seen, created_at, revoked_at FROM devices WHERE api_key_hash = $1 AND status != 'revoked'", hash)
+	row := r.db.QueryRowContext(ctx, "SELECT id, name, location, direction, COALESCE(mode, 'attendance'), api_key_hash, status, ip_address, last_seen, created_at, revoked_at FROM devices WHERE api_key_hash = $1 AND status != 'revoked'", hash)
 	return scanDeviceRow(row)
 }
 
@@ -121,7 +121,7 @@ func scanDeviceRow(row *sql.Row) (*entity.Device, error) {
 	var d entity.Device
 	var lastSeen, revokedAt sql.NullTime
 	var ipAddr sql.NullString
-	if err := row.Scan(&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &ipAddr, &lastSeen, &d.CreatedAt, &revokedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.Name, &d.Location, &d.Direction, &d.Mode, &d.ApiKeyHash, &d.Status, &ipAddr, &lastSeen, &d.CreatedAt, &revokedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, entity.ErrNotFound
 		}
@@ -141,7 +141,7 @@ func scanDeviceRow(row *sql.Row) (*entity.Device, error) {
 
 func (r *deviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 	query := `
-	SELECT d.id, d.name, d.location, d.direction, d.api_key_hash, d.status, d.ip_address, d.last_seen, d.created_at, d.revoked_at,
+	SELECT d.id, d.name, d.location, d.direction, COALESCE(d.mode, 'attendance'), d.api_key_hash, d.status, d.ip_address, d.last_seen, d.created_at, d.revoked_at,
 	       s.applied_version, s.model_version, s.sw_version, s.cpu_temp, s.fps, s.outbox_pending, s.updated_at
 	FROM devices d
 	LEFT JOIN device_state s ON d.id = s.device_id
@@ -164,7 +164,7 @@ func (r *deviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 		var stateUpdated sql.NullTime
 
 		if err := rows.Scan(
-			&d.ID, &d.Name, &d.Location, &d.Direction, &d.ApiKeyHash, &d.Status, &ipAddr, &lastSeen, &d.CreatedAt, &revokedAt,
+			&d.ID, &d.Name, &d.Location, &d.Direction, &d.Mode, &d.ApiKeyHash, &d.Status, &ipAddr, &lastSeen, &d.CreatedAt, &revokedAt,
 			&appliedV, &modelV, &swV, &cpuTemp, &fps, &outboxPending, &stateUpdated,
 		); err != nil {
 			return nil, err
@@ -206,17 +206,28 @@ func (r *deviceRepo) List(ctx context.Context) ([]*entity.Device, error) {
 }
 
 func (r *deviceRepo) Create(ctx context.Context, device *entity.Device) error {
+	if device.Mode == "" {
+		device.Mode = "attendance"
+	}
 	query := `
-	INSERT INTO devices (id, name, location, direction, api_key_hash, status, ip_address, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	INSERT INTO devices (id, name, location, direction, mode, api_key_hash, status, ip_address, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		device.ID, device.Name, device.Location, device.Direction, device.ApiKeyHash, device.Status, device.IPAddress, device.CreatedAt)
+		device.ID, device.Name, device.Location, device.Direction, device.Mode, device.ApiKeyHash, device.Status, device.IPAddress, device.CreatedAt)
 	if err != nil {
 		return err
 	}
 	_, _ = r.db.ExecContext(ctx, "INSERT INTO device_state (device_id, applied_version, updated_at) VALUES ($1, 0, $2) ON CONFLICT(device_id) DO NOTHING", device.ID, device.CreatedAt)
 	return nil
+}
+
+func (r *deviceRepo) UpdateMode(ctx context.Context, id string, mode string) error {
+	if mode == "" {
+		mode = "attendance"
+	}
+	_, err := r.db.ExecContext(ctx, "UPDATE devices SET mode = $1 WHERE id = $2", mode, id)
+	return err
 }
 
 func (r *deviceRepo) UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error {

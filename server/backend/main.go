@@ -59,6 +59,7 @@ func main() {
 	enrollmentRepo := postgres.NewEnrollmentRepository(pgDB)
 	auditRepo := postgres.NewAuditRepository(pgDB)
 	settingsRepo := postgres.NewSettingsRepository(pgDB)
+	meetingRepo := postgres.NewMeetingRepository(pgDB)
 
 	// 2. Infrastructure: Security Token Maker
 	tokenMaker := token.NewTokenMaker(jwtSecret)
@@ -67,8 +68,9 @@ func main() {
 	authUC := usecase.NewAuthUseCase(adminRepo, auditRepo, tokenMaker)
 	deviceUC := usecase.NewDeviceUseCase(deviceRepo, auditRepo)
 	userUC := usecase.NewUserUseCase(userRepo, auditRepo)
+	meetingUC := usecase.NewMeetingUseCase(meetingRepo, deviceRepo, userRepo, auditRepo)
 	enrollmentUC := usecase.NewEnrollmentUseCase(enrollmentRepo, userRepo, uploadDir, auditRepo, deviceRepo)
-	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo, auditRepo, userRepo, settingsRepo, enrollmentUC)
+	attendanceUC := usecase.NewAttendanceUseCase(attendanceRepo, auditRepo, userRepo, settingsRepo, deviceRepo, meetingUC, enrollmentUC)
 	syncUC := usecase.NewSyncUseCase(deviceRepo, userRepo, attendanceUC, enrollmentRepo)
 	auditUC := usecase.NewAuditUseCase(auditRepo)
 	settingsUC := usecase.NewSettingsUseCase(settingsRepo, auditRepo)
@@ -81,6 +83,7 @@ func main() {
 		Auth:       http.NewAuthHandler(authUC),
 		User:       http.NewUserHandler(userUC),
 		Attendance: http.NewAttendanceHandler(attendanceUC, eventBroker),
+		Meeting:    http.NewMeetingHandler(meetingUC, eventBroker),
 		Device:     http.NewDeviceHandler(deviceUC, eventBroker),
 		Sync:       http.NewSyncHandler(syncUC, eventBroker),
 		Enrollment: http.NewEnrollmentHandler(enrollmentUC, eventBroker, auditRepo, userRepo),

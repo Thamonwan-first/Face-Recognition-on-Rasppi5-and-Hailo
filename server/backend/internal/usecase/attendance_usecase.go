@@ -22,6 +22,8 @@ type AttendanceUseCase struct {
 	auditRepo      ports.AuditRepository
 	userRepo       ports.UserRepository
 	settingsRepo   ports.SettingsRepository
+	deviceRepo     ports.DeviceRepository
+	meetingUC      *MeetingUseCase
 	enrollmentUC   *EnrollmentUseCase
 }
 
@@ -38,6 +40,10 @@ func NewAttendanceUseCase(
 			uc.userRepo = v
 		case ports.SettingsRepository:
 			uc.settingsRepo = v
+		case ports.DeviceRepository:
+			uc.deviceRepo = v
+		case *MeetingUseCase:
+			uc.meetingUC = v
 		case *EnrollmentUseCase:
 			uc.enrollmentUC = v
 		}
@@ -266,6 +272,17 @@ func (uc *AttendanceUseCase) ProcessEvent(ctx context.Context, event *entity.Att
 		filePath := filepath.Join("data/uploads/snapshots", fmt.Sprintf("%s.jpg", event.EventID))
 		if _, err := saveSnapshotFromB64(event.SnapshotB64, filePath); err == nil {
 			event.SnapshotURL = fmt.Sprintf("/api/uploads/snapshots/%s.jpg", event.EventID)
+		}
+	}
+
+	// 1.5 Dedicated Meeting Mode Interception:
+	// If the device is designated as a meeting room scanner, record directly to meeting attendees
+	// and DO NOT modify standard daily attendance pairs.
+	if uc.deviceRepo != nil && uc.meetingUC != nil && event.DeviceID != "" {
+		if dev, err := uc.deviceRepo.GetByID(ctx, event.DeviceID); err == nil && dev != nil && dev.Mode == "meeting" {
+			_ = uc.attendanceRepo.SaveEvent(ctx, event)
+			_, mErr := uc.meetingUC.RecordMeetingAttendance(ctx, event)
+			return mErr
 		}
 	}
 

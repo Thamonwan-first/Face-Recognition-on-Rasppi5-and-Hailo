@@ -7,6 +7,7 @@ type Device struct {
 	Name       string       `json:"name"`
 	Location   string       `json:"location"`
 	Direction  string       `json:"direction"`
+	Mode       string       `json:"mode"`
 	ApiKeyHash string       `json:"-"`
 	Status     string       `json:"status"`
 	IPAddress  string       `json:"ip_address,omitempty"`
