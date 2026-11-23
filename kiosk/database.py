@@ -8,6 +8,7 @@ import uuid
 import base64
 import sqlite3
 import logging
+import threading
 from pathlib import Path
 from datetime import datetime, timezone
 import numpy as np
@@ -74,6 +75,7 @@ class Database:
 
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+        self._lock = threading.Lock()
 
     def load_active_gallery(self) -> list[dict]:
         """Load all users with embeddings (active and expired/suspended) into RAM."""
@@ -84,9 +86,10 @@ class Database:
             JOIN user_embeddings e ON u.id = e.user_id
             WHERE u.deleted_at IS NULL
         """
-        cursor = self.conn.cursor()
-        cursor.execute(sql)
-        rows = cursor.fetchall()
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(sql)
+            rows = cursor.fetchall()
 
         gallery = []
         for r in rows:
@@ -116,9 +119,10 @@ class Database:
             WHERE user_id = ?
             ORDER BY created_at DESC LIMIT 1
         """
-        cursor = self.conn.cursor()
-        cursor.execute(sql, (user_id,))
-        row = cursor.fetchone()
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(sql, (user_id,))
+            row = cursor.fetchone()
         if not row:
             return False
 
@@ -145,16 +149,17 @@ class Database:
             hour=0, minute=0, second=0, microsecond=0
         ).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
-        cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            SELECT event_id FROM attendance_events
-            WHERE user_id = ? AND created_at >= ? AND direction IN ('IN', 'OUT')
-            LIMIT 1
-            """,
-            (user_id, today_start_iso),
-        )
-        row = cursor.fetchone()
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT event_id FROM attendance_events
+                WHERE user_id = ? AND created_at >= ? AND direction IN ('IN', 'OUT')
+                LIMIT 1
+                """,
+                (user_id, today_start_iso),
+            )
+            row = cursor.fetchone()
         return "OUT" if row else "IN"
 
     def record_attendance(
@@ -188,29 +193,30 @@ class Database:
             "created_at": now_iso,
         }
 
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(
-                """
-                INSERT INTO attendance_events
-                (event_id, user_id, device_id, direction, confidence, clock_synced, created_at, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (event_id, user_id, device_id, actual_direction, confidence, 1 if clock_synced else 0, now_iso, notes or None),
-            )
-            cursor.execute(
-                """
-                INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
-                VALUES (?, 'attendance', ?, ?, 0, 0)
-                """,
-                (event_id, json.dumps(payload), now_iso),
-            )
-            self.conn.commit()
-            return payload
-        except Exception as e:
-            self.conn.rollback()
-            logger.error("Failed to record attendance: %s", e)
-            raise e
+        with self._lock:
+            cursor = self.conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO attendance_events
+                    (event_id, user_id, device_id, direction, confidence, clock_synced, created_at, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (event_id, user_id, device_id, actual_direction, confidence, 1 if clock_synced else 0, now_iso, notes or None),
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
+                    VALUES (?, 'attendance', ?, ?, 0, 0)
+                    """,
+                    (event_id, json.dumps(payload), now_iso),
+                )
+                self.conn.commit()
+                return payload
+            except Exception as e:
+                self.conn.rollback()
+                logger.error("Failed to record attendance: %s", e)
+                raise e
 
     def record_unrecognized(
         self,
@@ -228,21 +234,22 @@ class Database:
             "snapshot_b64": snapshot_b64,
             "created_at": now_iso,
         }
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(
-                """
-                INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
-                VALUES (?, 'unrecognized_scan', ?, ?, 0, 0)
-                """,
-                (event_id, json.dumps(payload), now_iso),
-            )
-            self.conn.commit()
-            return payload
-        except Exception as e:
-            self.conn.rollback()
-            logger.error("Failed to record unrecognized scan: %s", e)
-            raise e
+        with self._lock:
+            cursor = self.conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
+                    VALUES (?, 'unrecognized_scan', ?, ?, 0, 0)
+                    """,
+                    (event_id, json.dumps(payload), now_iso),
+                )
+                self.conn.commit()
+                return payload
+            except Exception as e:
+                self.conn.rollback()
+                logger.error("Failed to record unrecognized scan: %s", e)
+                raise e
 
     def register_user(
         self,
@@ -264,44 +271,45 @@ class Database:
             emb = emb / norm
         emb_bytes = emb.tobytes()
 
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(
-                """
-                INSERT INTO users (id, employee_id, name, department, status, version, updated_at)
-                VALUES (?, ?, ?, ?, 'active', 0, ?)
-                """,
-                (user_id, employee_id, name, department, now_iso),
-            )
-            cursor.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
-            cursor.execute(
-                """
-                INSERT INTO user_embeddings
-                (id, user_id, embedding, model_version, source, device_id, quality_score, created_at)
-                VALUES (?, ?, ?, ?, 'kiosk', ?, 1.0, ?)
-                """,
-                (emb_id, user_id, emb_bytes, model_version, device_id, now_iso),
-            )
-            cursor.execute(
-                """
-                INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
-                VALUES (?, 'user_enrollment', ?, ?, 0, 0)
-                """,
-                (
-                    user_id,
-                    json.dumps({
-                        "user_id": user_id,
-                        "name": name,
-                        "employee_id": employee_id,
-                        "department": department,
-                        "embedding_b64": base64.b64encode(emb_bytes).decode("utf-8"),
-                    }),
-                    now_iso,
-                ),
-            )
-            self.conn.commit()
-            return user_id
-        except Exception as e:
-            self.conn.rollback()
-            logger.error("Failed to register user: %s", e)
-            raise e
+        with self._lock:
+            cursor = self.conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO users (id, employee_id, name, department, status, version, updated_at)
+                    VALUES (?, ?, ?, ?, 'active', 0, ?)
+                    """,
+                    (user_id, employee_id, name, department, now_iso),
+                )
+                cursor.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
+                cursor.execute(
+                    """
+                    INSERT INTO user_embeddings
+                    (id, user_id, embedding, model_version, source, device_id, quality_score, created_at)
+                    VALUES (?, ?, ?, ?, 'kiosk', ?, 1.0, ?)
+                    """,
+                    (emb_id, user_id, emb_bytes, model_version, device_id, now_iso),
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
+                    VALUES (?, 'user_enrollment', ?, ?, 0, 0)
+                    """,
+                    (
+                        user_id,
+                        json.dumps({
+                            "user_id": user_id,
+                            "name": name,
+                            "employee_id": employee_id,
+                            "department": department,
+                            "embedding_b64": base64.b64encode(emb_bytes).decode("utf-8"),
+                        }),
+                        now_iso,
+                    ),
+                )
+                self.conn.commit()
+                return user_id
+            except Exception as e:
+                self.conn.rollback()
+                logger.error("Failed to register user: %s", e)
+                raise e

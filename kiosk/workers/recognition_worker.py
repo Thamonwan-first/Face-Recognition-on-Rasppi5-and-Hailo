@@ -91,6 +91,7 @@ class RecognitionWorker(QThread):
 
         self.gallery_cache = []
         self._recent_scans = {}
+        self._prev_face_center = None  # Track face position for anti-spoof reset
         self.reload_gallery()
 
     def reload_gallery(self):
@@ -134,6 +135,17 @@ class RecognitionWorker(QThread):
                 for f in faces:
                     x1, y1, x2, y2 = f["bbox"]
                     landmarks = f.get("landmarks", [])
+
+                    # Reset anti-spoof state when the face position jumps significantly
+                    # (different person stepped in, or phone screen replaced real face)
+                    if self.anti_spoof and self.anti_spoof.enabled:
+                        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+                        bw = x2 - x1
+                        if self._prev_face_center is not None:
+                            px, py = self._prev_face_center
+                            if abs(cx - px) > bw * 0.5 or abs(cy - py) > bw * 0.5:
+                                self.anti_spoof.reset()
+                        self._prev_face_center = (cx, cy)
 
                     # 1. Passive Anti-Spoofing Check (Dual Ensemble)
                     if self.anti_spoof and self.anti_spoof.enabled:
@@ -299,6 +311,7 @@ class RecognitionWorker(QThread):
 
                 if not faces:
                     self._unknown_face_start = None
+                    self._prev_face_center = None
                     if self.anti_spoof:
                         self.anti_spoof.reset()
 

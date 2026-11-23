@@ -25,7 +25,7 @@ type TokenMaker struct {
 
 func NewTokenMaker(secretKey string) *TokenMaker {
 	if secretKey == "" {
-		secretKey = "super-secret-default-attendance-jwt-key"
+		panic("FATAL: JWT secret key must not be empty. Set JWT_SECRET environment variable.")
 	}
 	return &TokenMaker{secretKey: []byte(secretKey)}
 }
