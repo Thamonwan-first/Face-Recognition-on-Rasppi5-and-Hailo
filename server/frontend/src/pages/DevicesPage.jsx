@@ -558,10 +558,10 @@ export default function DevicesPage() {
 
             <form onSubmit={handleEditSubmit}>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>รหัสอุปกรณ์ (ID)</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 500, fontSize: '0.85rem' }}>รหัสอุปกรณ์ (ID)</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className="input-field"
                   value={editingDevice.id}
                   disabled
                   style={{ background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }}
@@ -569,10 +569,10 @@ export default function DevicesPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>ชื่ออุปกรณ์ *</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 500, fontSize: '0.85rem' }}>ชื่ออุปกรณ์ *</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className="input-field"
                   placeholder="เช่น ตู้สแกนหน้าประตู 1"
                   value={editFormData.name}
                   onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
@@ -581,10 +581,10 @@ export default function DevicesPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>สถานที่ติดตั้ง</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 500, fontSize: '0.85rem' }}>สถานที่ติดตั้ง</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className="input-field"
                   placeholder="เช่น อาคาร A ชั้น 1 หรือ ห้องประชุม 1"
                   value={editFormData.location}
                   onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })}
@@ -592,9 +592,9 @@ export default function DevicesPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>ทิศทางการบันทึก (Direction)</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 500, fontSize: '0.85rem' }}>ทิศทางการบันทึก (Direction)</label>
                 <select
-                  className="form-control"
+                  className="input-field"
                   value={editFormData.direction}
                   onChange={(e) => setEditFormData({ ...editFormData, direction: e.target.value })}
                 >
@@ -605,9 +605,9 @@ export default function DevicesPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label" style={{ fontWeight: 500, fontSize: '0.85rem' }}>โหมดการทำงาน (Mode)</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 500, fontSize: '0.85rem' }}>โหมดการทำงาน (Mode)</label>
                 <select
-                  className="form-control"
+                  className="input-field"
                   value={editFormData.mode}
                   onChange={(e) => setEditFormData({ ...editFormData, mode: e.target.value })}
                 >

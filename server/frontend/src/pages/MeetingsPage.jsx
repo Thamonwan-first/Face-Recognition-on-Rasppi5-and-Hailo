@@ -31,7 +31,7 @@ export default function MeetingsPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   // 1. Fetch meetings list
-  const { data: meetings = [], isLoading: isMeetingsLoading } = useQuery({
+  const { data: rawMeetings, isLoading: isMeetingsLoading } = useQuery({
     queryKey: ['meetings', dateFilter, statusFilter],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -42,22 +42,25 @@ export default function MeetingsPage() {
     },
     refetchInterval: 3000,
   });
+  const meetings = Array.isArray(rawMeetings) ? rawMeetings : [];
 
   // 2. Fetch devices list for dropdown
-  const { data: devices = [] } = useQuery({
+  const { data: rawDevices } = useQuery({
     queryKey: ['devices'],
     queryFn: () => api.get('/api/devices/status'),
   });
+  const devices = Array.isArray(rawDevices) ? rawDevices : [];
 
   // 3. Fetch selected meeting details & attendees if a meeting is open
   const selectedMeeting = meetings.find((m) => m.id === selectedMeetingId);
 
-  const { data: attendees = [], isLoading: isAttendeesLoading } = useQuery({
+  const { data: rawAttendees, isLoading: isAttendeesLoading } = useQuery({
     queryKey: ['meeting_attendees', selectedMeetingId],
     queryFn: () => api.get(`/api/meetings/${selectedMeetingId}/attendees`),
     enabled: !!selectedMeetingId,
     refetchInterval: 2500,
   });
+  const attendees = Array.isArray(rawAttendees) ? rawAttendees : [];
 
   // Mutations
   const createMutation = useMutation({
@@ -172,9 +175,10 @@ export default function MeetingsPage() {
       alert('ไม่มีข้อมูลผู้เข้าร่วมประชุมที่จะส่งออก');
       return;
     }
-    const headers = ['ลำดับ', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'สังกัด/ฝ่าย', 'เวลาที่สแกน', 'สถานะ', 'มาสาย (นาที)'];
+    const headers = ['ลำดับ', 'รูปสแกน (URL)', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'สังกัด/ฝ่าย', 'เวลาที่สแกน', 'สถานะ', 'มาสาย (นาที)'];
     const rows = attendees.map((a, idx) => [
       idx + 1,
+      a.snapshot_url || '-',
       a.employee_id || '-',
       a.user_name || '-',
       a.department || '-',
@@ -209,12 +213,19 @@ export default function MeetingsPage() {
       .map(
         (a, idx) => `
         <tr>
-          <td style="text-align: center;">${idx + 1}</td>
-          <td style="text-align: center;">${a.employee_id || '-'}</td>
-          <td>${a.user_name || '-'}</td>
-          <td>${a.department || '-'}</td>
-          <td style="text-align: center;">${formatThaiDateTime(a.scanned_at)}</td>
-          <td style="text-align: center; color: ${a.status === 'on_time' ? '#15803d' : '#b91c1c'}; font-weight: bold;">
+          <td style="text-align: center; vertical-align: middle;">${idx + 1}</td>
+          <td style="text-align: center; vertical-align: middle; padding: 4px;">
+            ${
+              a.snapshot_url
+                ? `<img src="${a.snapshot_url}" alt="รูปสแกน" style="width: 44px; height: 44px; border-radius: 4px; object-fit: cover; border: 1px solid #cbd5e1; display: block; margin: 0 auto;" />`
+                : `<span style="font-size: 11px; color: #94a3b8;">ไม่มีรูป</span>`
+            }
+          </td>
+          <td style="text-align: center; vertical-align: middle;">${a.employee_id || '-'}</td>
+          <td style="vertical-align: middle; font-weight: 500;">${a.user_name || '-'}</td>
+          <td style="vertical-align: middle;">${a.department || '-'}</td>
+          <td style="text-align: center; vertical-align: middle;">${formatThaiDateTime(a.scanned_at)}</td>
+          <td style="text-align: center; vertical-align: middle; color: ${a.status === 'on_time' ? '#15803d' : '#b91c1c'}; font-weight: bold;">
             ${a.status === 'on_time' ? 'ตรงเวลา' : `มาสาย (${a.minutes_late} นาที)`}
           </td>
         </tr>
@@ -258,12 +269,13 @@ export default function MeetingsPage() {
         <table>
           <thead>
             <tr>
-              <th style="width: 50px; text-align: center;">ลำดับ</th>
-              <th style="width: 100px; text-align: center;">รหัสพนักงาน</th>
+              <th style="width: 45px; text-align: center;">ลำดับ</th>
+              <th style="width: 65px; text-align: center;">รูปสแกน</th>
+              <th style="width: 95px; text-align: center;">รหัสพนักงาน</th>
               <th>ชื่อ-นามสกุล</th>
               <th>สังกัด/ฝ่าย</th>
               <th style="width: 130px; text-align: center;">เวลาที่สแกน</th>
-              <th style="width: 140px; text-align: center;">สถานะ</th>
+              <th style="width: 130px; text-align: center;">สถานะ</th>
             </tr>
           </thead>
           <tbody>

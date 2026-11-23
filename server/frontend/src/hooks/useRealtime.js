@@ -38,6 +38,11 @@ export function useRealtime() {
           queryClient.invalidateQueries({ queryKey: ['users'] });
         });
 
+        eventSource.addEventListener('meeting', () => {
+          queryClient.invalidateQueries({ queryKey: ['meetings'] });
+          queryClient.invalidateQueries({ queryKey: ['meeting_attendees'] });
+        });
+
         eventSource.onerror = (err) => {
           // EventSource automatically attempts to reconnect on network drop.
           // If connection is closed (e.g., token expired or server restarted), re-initiate.

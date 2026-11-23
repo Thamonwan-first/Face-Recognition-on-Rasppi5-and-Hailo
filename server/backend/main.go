@@ -126,6 +126,33 @@ func main() {
 		}
 	}()
 
+	// 9. Background Watcher: Automatic Meeting Status Transitions (runs every 10s)
+	go func() {
+		// Run initial check on startup
+		initCtx, initCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if changed, err := meetingUC.AutoSyncStatuses(initCtx); err == nil && changed > 0 {
+			eventBroker.Publish(broker.Event{
+				Type:    "meeting",
+				Payload: map[string]interface{}{"action": "status_auto_updated", "changed_count": changed},
+			})
+		}
+		initCancel()
+
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			changed, err := meetingUC.AutoSyncStatuses(ctx)
+			cancel()
+			if err == nil && changed > 0 {
+				eventBroker.Publish(broker.Event{
+					Type:    "meeting",
+					Payload: map[string]interface{}{"action": "status_auto_updated", "changed_count": changed},
+				})
+			}
+		}
+	}()
+
 	log.Printf("Server listening on :%s", port)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Server failed to run: %v", err)

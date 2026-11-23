@@ -127,7 +127,7 @@ func (r *meetingRepo) List(ctx context.Context, date string, status string, devi
 	}
 	defer rows.Close()
 
-	var meetings []*entity.Meeting
+	meetings := make([]*entity.Meeting, 0)
 	for rows.Next() {
 		var m entity.Meeting
 		var devID, devName sql.NullString
@@ -209,7 +209,7 @@ func (r *meetingRepo) ListAttendees(ctx context.Context, meetingID string) ([]*e
 	}
 	defer rows.Close()
 
-	var attendees []*entity.MeetingAttendee
+	attendees := make([]*entity.MeetingAttendee, 0)
 	for rows.Next() {
 		var a entity.MeetingAttendee
 		if err := rows.Scan(

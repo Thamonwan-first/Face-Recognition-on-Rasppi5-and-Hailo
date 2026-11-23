@@ -289,3 +289,103 @@ func TestAttendanceUseCase_MeetingModeIsolation(t *testing.T) {
 		t.Fatalf("expected attendance_pairs to remain EMPTY, but got %d pairs", len(attRepo.pairs))
 	}
 }
+
+func TestMeetingUseCase_AutoSyncStatuses_AndTimeTransitions(t *testing.T) {
+	meetRepo := &mockMeetingRepo{}
+	devRepo := &mockDeviceRepo{}
+	userRepo := &mockUserRepo{}
+
+	meetUC := usecase.NewMeetingUseCase(meetRepo, devRepo, userRepo, nil)
+
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	now := time.Now().In(loc)
+	todayStr := now.Format("2006-01-02")
+	yesterdayStr := now.AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrowStr := now.AddDate(0, 0, 1).Format("2006-01-02")
+
+	// Meeting 1: Yesterday -> should be completed
+	mPast := &entity.Meeting{
+		ID:          "m-past",
+		Title:       "Past Meeting",
+		MeetingDate: yesterdayStr,
+		StartTime:   "09:00",
+		EndTime:     "10:00",
+		Status:      "scheduled",
+	}
+
+	// Meeting 2: Tomorrow -> should remain scheduled
+	mFuture := &entity.Meeting{
+		ID:          "m-future",
+		Title:       "Future Meeting",
+		MeetingDate: tomorrowStr,
+		StartTime:   "09:00",
+		EndTime:     "10:00",
+		Status:      "scheduled",
+	}
+
+	// Meeting 3: Cancelled -> should remain cancelled
+	mCancelled := &entity.Meeting{
+		ID:          "m-cancelled",
+		Title:       "Cancelled Meeting",
+		MeetingDate: todayStr,
+		StartTime:   "00:00",
+		EndTime:     "23:59",
+		Status:      "cancelled",
+	}
+
+	// Meeting 4: Today active window -> ongoing
+	curHour := now.Hour()
+	stHour := curHour - 1
+	if stHour < 0 {
+		stHour = 0
+	}
+	etHour := curHour + 1
+	if etHour > 23 {
+		etHour = 23
+	}
+	mActive := &entity.Meeting{
+		ID:          "m-active",
+		Title:       "Active Meeting",
+		MeetingDate: todayStr,
+		StartTime:   time.Date(now.Year(), now.Month(), now.Day(), stHour, 0, 0, 0, loc).Format("15:04"),
+		EndTime:     time.Date(now.Year(), now.Month(), now.Day(), etHour, 59, 0, 0, loc).Format("15:04"),
+		Status:      "scheduled",
+	}
+
+	meetRepo.meetings = []*entity.Meeting{mPast, mFuture, mCancelled, mActive}
+
+	// Run AutoSyncStatuses
+	changed, err := meetUC.AutoSyncStatuses(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error from AutoSyncStatuses: %v", err)
+	}
+
+	// mPast (scheduled -> completed) and mActive (scheduled -> ongoing) should have changed
+	if changed != 2 {
+		t.Errorf("expected 2 changed meetings, got %d", changed)
+	}
+
+	if mPast.Status != "completed" {
+		t.Errorf("expected mPast to be 'completed', got '%s'", mPast.Status)
+	}
+	if mFuture.Status != "scheduled" {
+		t.Errorf("expected mFuture to remain 'scheduled', got '%s'", mFuture.Status)
+	}
+	if mCancelled.Status != "cancelled" {
+		t.Errorf("expected mCancelled to remain 'cancelled', got '%s'", mCancelled.Status)
+	}
+	if mActive.Status != "ongoing" {
+		t.Errorf("expected mActive to be 'ongoing', got '%s'", mActive.Status)
+	}
+
+	// Test dynamic List enriched
+	list, err := meetUC.List(context.Background(), "", "", "")
+	if err != nil {
+		t.Fatalf("unexpected error from List: %v", err)
+	}
+	for _, m := range list {
+		if m.ID == "m-active" && m.Status != "ongoing" {
+			t.Errorf("List should return dynamic ongoing for m-active, got %s", m.Status)
+		}
+	}
+}

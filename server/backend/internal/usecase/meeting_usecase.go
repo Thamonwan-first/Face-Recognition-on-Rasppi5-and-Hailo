@@ -155,12 +155,94 @@ func (uc *MeetingUseCase) Update(ctx context.Context, adminID string, id string,
 	return meeting, nil
 }
 
+// ComputeEffectiveStatus calculates the current operational status of a meeting based on Asia/Bangkok time.
+func ComputeEffectiveStatus(m *entity.Meeting, now time.Time) string {
+	if m == nil {
+		return ""
+	}
+	if m.Status == "cancelled" {
+		return "cancelled"
+	}
+	if m.MeetingDate == "" || m.StartTime == "" || m.EndTime == "" {
+		return m.Status
+	}
+
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	localNow := now.In(loc)
+	todayStr := localNow.Format("2006-01-02")
+	timeStr := localNow.Format("15:04")
+
+	if m.MeetingDate < todayStr {
+		return "completed"
+	}
+	if m.MeetingDate > todayStr {
+		return "scheduled"
+	}
+
+	// Same day: compare start and end times (HH:MM)
+	if timeStr < m.StartTime {
+		return "scheduled"
+	}
+	if timeStr > m.EndTime {
+		return "completed"
+	}
+	return "ongoing"
+}
+
 func (uc *MeetingUseCase) GetByID(ctx context.Context, id string) (*entity.Meeting, error) {
-	return uc.meetingRepo.GetByID(ctx, id)
+	m, err := uc.meetingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	m.Status = ComputeEffectiveStatus(m, time.Now().In(loc))
+	return m, nil
 }
 
 func (uc *MeetingUseCase) List(ctx context.Context, date, status, deviceID string) ([]*entity.Meeting, error) {
-	return uc.meetingRepo.List(ctx, date, status, deviceID)
+	meetings, err := uc.meetingRepo.List(ctx, date, "", deviceID)
+	if err != nil {
+		return nil, err
+	}
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	now := time.Now().In(loc)
+
+	res := make([]*entity.Meeting, 0, len(meetings))
+	for _, m := range meetings {
+		m.Status = ComputeEffectiveStatus(m, now)
+		if status != "" && status != "ALL" && m.Status != status {
+			continue
+		}
+		res = append(res, m)
+	}
+	return res, nil
+}
+
+func (uc *MeetingUseCase) AutoSyncStatuses(ctx context.Context) (int, error) {
+	meetings, err := uc.meetingRepo.List(ctx, "", "", "")
+	if err != nil {
+		return 0, err
+	}
+
+	loc := time.FixedZone("Asia/Bangkok", 7*3600)
+	now := time.Now().In(loc)
+	changedCount := 0
+
+	for _, m := range meetings {
+		if m.Status == "cancelled" {
+			continue
+		}
+		newStatus := ComputeEffectiveStatus(m, now)
+		if newStatus != "" && newStatus != m.Status {
+			m.Status = newStatus
+			m.UpdatedAt = now.UTC()
+			if err := uc.meetingRepo.Update(ctx, m); err == nil {
+				changedCount++
+			}
+		}
+	}
+
+	return changedCount, nil
 }
 
 func (uc *MeetingUseCase) Delete(ctx context.Context, adminID string, id string) error {
