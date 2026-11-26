@@ -170,33 +170,53 @@ class EnrollmentWorker:
         caches avatars, pushes to outbox for server sync, and moves images to processed/.
         """
         kiosk_root = Path(__file__).resolve().parent.parent
-        enroll_dir = kiosk_root / "enrollment_images"
-        if not enroll_dir.is_dir():
+        candidate_dirs = [
+            kiosk_root / "enrollment_images",
+            kiosk_root / "employee",
+            kiosk_root / "employees",
+        ]
+        target_dirs = [d for d in candidate_dirs if d.is_dir()]
+        if not target_dirs:
             return
 
-        processed_dir = enroll_dir / "processed"
+        processed_dir = kiosk_root / "enrollment_images" / "processed"
         processed_dir.mkdir(parents=True, exist_ok=True)
         avatars_dir = kiosk_root / "data" / "avatars"
         avatars_dir.mkdir(parents=True, exist_ok=True)
 
         valid_exts = {".jpg", ".jpeg", ".png", ".webp"}
+        generic_names = {"img", "image", "photo", "face", "front", "side", "tilt", "pic", "picture", "1", "2", "3", "4", "5", "employee", "employees", "photos", "images"}
         employee_groups = {}  # emp_id -> list of Path objects
 
-        # 1. Scan subfolders named by employee ID (e.g. enrollment_images/EMP001/...)
-        for item in enroll_dir.iterdir():
-            if item.is_dir():
-                if item.name.startswith(".") or item.name == "processed":
+        # Recursively scan candidate directories (handles flat files, subfolders, or nested folders like employee/)
+        for enroll_dir in target_dirs:
+            for p in sorted(enroll_dir.rglob("*")):
+                if not p.is_file() or p.suffix.lower() not in valid_exts:
                     continue
-                emp_id = item.name.strip()
-                imgs = [f for f in item.iterdir() if f.is_file() and f.suffix.lower() in valid_exts]
-                if imgs:
-                    employee_groups.setdefault(emp_id, []).extend(imgs)
+                try:
+                    rel_parts = p.relative_to(enroll_dir).parts
+                except Exception:
+                    continue
 
-            elif item.is_file() and item.suffix.lower() in valid_exts:
-                # 2. Scan flat files named by employee ID (e.g. enrollment_images/EMP001.jpg, EMP001_1.jpg)
-                emp_id = item.stem.split("_")[0].strip()
-                if emp_id:
-                    employee_groups.setdefault(emp_id, []).append(item)
+                # Ignore processed or hidden folders
+                if any(part.startswith(".") or part == "processed" for part in rel_parts):
+                    continue
+
+                clean_stem = p.stem.split("_")[0].strip()
+                parent_name = p.parent.name.strip()
+
+                # Determine employee ID:
+                # 1. If filename is meaningful (not generic), use filename
+                # 2. Otherwise if parent folder is meaningful (not generic like "employee" or "photos"), use parent folder
+                if clean_stem.lower() not in generic_names:
+                    emp_id = clean_stem
+                elif parent_name.lower() not in generic_names and parent_name != enroll_dir.name:
+                    emp_id = parent_name
+                else:
+                    emp_id = clean_stem
+
+                if emp_id and emp_id.lower() not in generic_names:
+                    employee_groups.setdefault(emp_id, []).append(p)
 
         if not employee_groups:
             return

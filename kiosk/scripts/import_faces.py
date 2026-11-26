@@ -37,23 +37,31 @@ def process_folder(image_dir: str, db_path: str = None, sync_to_server: bool = T
 
     print(f"📁 กำลังสแกนโฟลเดอร์: {image_dir}")
     valid_exts = {".jpg", ".jpeg", ".png", ".webp"}
+    generic_names = {"img", "image", "photo", "face", "front", "side", "tilt", "pic", "picture", "1", "2", "3", "4", "5", "employee", "employees", "photos", "images"}
     employee_groups = {}
 
-    # 1. ตรวจสอบโฟลเดอร์ย่อยตามรหัสพนักงาน เช่น image_dir/EMP001/...
-    for item in sorted(image_dir.iterdir()):
-        if item.is_dir():
-            if item.name.startswith(".") or item.name == "processed":
-                continue
-            emp_id = item.name.strip()
-            imgs = [f for f in item.iterdir() if f.is_file() and f.suffix.lower() in valid_exts]
-            if imgs:
-                employee_groups.setdefault(emp_id, []).extend(imgs)
+    for p in sorted(image_dir.rglob("*")):
+        if not p.is_file() or p.suffix.lower() not in valid_exts:
+            continue
+        try:
+            rel_parts = p.relative_to(image_dir).parts
+        except Exception:
+            continue
+        if any(part.startswith(".") or part == "processed" for part in rel_parts):
+            continue
 
-        elif item.is_file() and item.suffix.lower() in valid_exts:
-            # 2. ตรวจสอบไฟล์เดี่ยว เช่น image_dir/EMP001.jpg, EMP001_1.jpg
-            emp_id = item.stem.split("_")[0].strip()
-            if emp_id:
-                employee_groups.setdefault(emp_id, []).append(item)
+        clean_stem = p.stem.split("_")[0].strip()
+        parent_name = p.parent.name.strip()
+
+        if clean_stem.lower() not in generic_names:
+            emp_id = clean_stem
+        elif parent_name.lower() not in generic_names and parent_name != image_dir.name:
+            emp_id = parent_name
+        else:
+            emp_id = clean_stem
+
+        if emp_id and emp_id.lower() not in generic_names:
+            employee_groups.setdefault(emp_id, []).append(p)
 
     if not employee_groups:
         print("⚠️ ไม่พบไฟล์รูปภาพที่รองรับในโฟลเดอร์นี้")
