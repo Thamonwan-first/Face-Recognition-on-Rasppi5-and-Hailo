@@ -3,6 +3,9 @@ package usecase
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -159,6 +162,7 @@ type KioskEnrollmentDTO struct {
 	Name         string  `json:"name"`
 	Department   string  `json:"department"`
 	EmbeddingB64 string  `json:"embedding_b64"`
+	PhotoB64     string  `json:"photo_b64,omitempty"`
 	QualityScore float64 `json:"quality_score"`
 }
 
@@ -229,6 +233,18 @@ func (uc *SyncUseCase) SaveKioskEnrollment(ctx context.Context, deviceID string,
 			}
 			if err := uc.userRepo.SaveEmbedding(ctx, emb); err != nil {
 				return err
+			}
+		}
+	}
+
+	if dto.PhotoB64 != "" {
+		if rawPhoto, err := base64.StdEncoding.DecodeString(dto.PhotoB64); err == nil && len(rawPhoto) > 0 {
+			avatarDir := "data/uploads/avatars"
+			_ = os.MkdirAll(avatarDir, 0755)
+			avatarFilePath := filepath.Join(avatarDir, fmt.Sprintf("%s.jpg", user.ID))
+			if err := os.WriteFile(avatarFilePath, rawPhoto, 0644); err == nil {
+				user.PhotoURL = fmt.Sprintf("/api/uploads/avatars/%s.jpg", user.ID)
+				_ = uc.userRepo.Update(ctx, user)
 			}
 		}
 	}

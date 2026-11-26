@@ -4,10 +4,15 @@ computes 512-d Face Embedding on Hailo-8 (or CPU Fallback),
 and submits the result back to Server.
 """
 import time
+import uuid
+import json
+import shutil
 import base64
+import sqlite3
 import logging
 import threading
 from pathlib import Path
+from datetime import datetime, timezone
 import cv2
 import numpy as np
 import requests
@@ -42,6 +47,11 @@ class EnrollmentWorker:
                 self._check_and_process_job()
             except Exception as e:
                 logger.error("EnrollmentWorker error: %s", e)
+
+            try:
+                self._check_and_process_local_folder()
+            except Exception as e:
+                logger.error("Local enrollment folder error: %s", e)
 
             # Check every 4 seconds
             for _ in range(8):
@@ -152,3 +162,177 @@ class EnrollmentWorker:
 
         except Exception as e:
             logger.error("Error executing enrollment job: %s", e)
+
+    def _check_and_process_local_folder(self):
+        """
+        Scan kiosk/enrollment_images folder for photos or subfolders named by employee_id.
+        Computes 512-d ArcFace embeddings, registers users in local kiosk.db,
+        caches avatars, pushes to outbox for server sync, and moves images to processed/.
+        """
+        kiosk_root = Path(__file__).resolve().parent.parent
+        enroll_dir = kiosk_root / "enrollment_images"
+        if not enroll_dir.is_dir():
+            return
+
+        processed_dir = enroll_dir / "processed"
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        avatars_dir = kiosk_root / "data" / "avatars"
+        avatars_dir.mkdir(parents=True, exist_ok=True)
+
+        valid_exts = {".jpg", ".jpeg", ".png", ".webp"}
+        employee_groups = {}  # emp_id -> list of Path objects
+
+        # 1. Scan subfolders named by employee ID (e.g. enrollment_images/EMP001/...)
+        for item in enroll_dir.iterdir():
+            if item.is_dir():
+                if item.name.startswith(".") or item.name == "processed":
+                    continue
+                emp_id = item.name.strip()
+                imgs = [f for f in item.iterdir() if f.is_file() and f.suffix.lower() in valid_exts]
+                if imgs:
+                    employee_groups.setdefault(emp_id, []).extend(imgs)
+
+            elif item.is_file() and item.suffix.lower() in valid_exts:
+                # 2. Scan flat files named by employee ID (e.g. enrollment_images/EMP001.jpg, EMP001_1.jpg)
+                emp_id = item.stem.split("_")[0].strip()
+                if emp_id:
+                    employee_groups.setdefault(emp_id, []).append(item)
+
+        if not employee_groups:
+            return
+
+        db_path = getattr(self.config, "db_full_path", kiosk_root / "data" / "kiosk.db")
+        conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        any_enrolled = False
+
+        for emp_id, img_paths in employee_groups.items():
+            logger.info("Found local enrollment images for employee %s (%d file(s))", emp_id, len(img_paths))
+            captured_embeddings = []
+            primary_avatar_bytes = None
+
+            for img_path in sorted(img_paths)[:5]:  # limit to max 5 images per employee
+                try:
+                    frame_bgr = cv2.imread(str(img_path))
+                    if frame_bgr is None:
+                        continue
+                    if primary_avatar_bytes is None:
+                        _, buf = cv2.imencode(".jpg", frame_bgr)
+                        primary_avatar_bytes = buf.tobytes()
+
+                    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                    faces = self.detector.detect_faces(frame_rgb)
+                    if not faces:
+                        h, w = frame_rgb.shape[:2]
+                        s = min(h, w)
+                        crop = frame_rgb[(h - s) // 2:(h + s) // 2, (w - s) // 2:(w + s) // 2]
+                        aligned = cv2.resize(crop, (112, 112))
+                    else:
+                        best_face = max(faces, key=lambda f: (f["bbox"][2] - f["bbox"][0]) * (f["bbox"][3] - f["bbox"][1]))
+                        landmarks = best_face.get("landmarks", [])
+                        if len(landmarks) >= 5:
+                            aligned = align_face(frame_rgb, np.array(landmarks, dtype=np.float32), 112)
+                        else:
+                            x1, y1, x2, y2 = best_face["bbox"]
+                            h, w = frame_rgb.shape[:2]
+                            crop = frame_rgb[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+                            aligned = cv2.resize(crop, (112, 112))
+
+                    emb = self.detector.extract_embedding(aligned)
+                    if emb is not None:
+                        captured_embeddings.append(emb)
+                except Exception as ex:
+                    logger.warning("Error processing image %s for %s: %s", img_path.name, emp_id, ex)
+
+            if not captured_embeddings:
+                logger.warning("Could not extract any embeddings for %s, moving files to processed", emp_id)
+            else:
+                mean_emb = np.mean(captured_embeddings, axis=0)
+                norm = np.linalg.norm(mean_emb)
+                if norm > 1e-6:
+                    mean_emb = mean_emb / norm
+                emb_bytes = mean_emb.astype(np.float32).tobytes()
+                now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+                # Check if user already exists
+                cur.execute("SELECT id, name FROM users WHERE employee_id = ?", (emp_id,))
+                existing_user = cur.fetchone()
+                if existing_user:
+                    user_id = existing_user["id"]
+                    user_name = existing_user["name"]
+                    cur.execute("UPDATE users SET updated_at = ? WHERE id = ?", (now_iso, user_id))
+                else:
+                    user_id = str(uuid.uuid4())
+                    user_name = f"พนักงาน {emp_id}"
+                    cur.execute(
+                        """
+                        INSERT INTO users (id, employee_id, name, department, status, version, updated_at)
+                        VALUES (?, ?, ?, 'ฝ่ายทั่วไป', 'active', 0, ?)
+                        """,
+                        (user_id, emp_id, user_name, now_iso),
+                    )
+
+                # Save avatar locally
+                if primary_avatar_bytes:
+                    avatar_path = avatars_dir / f"{user_id}.jpg"
+                    avatar_path.write_bytes(primary_avatar_bytes)
+                    cur.execute("UPDATE users SET photo_path = ? WHERE id = ?", (str(avatar_path), user_id))
+
+                # Insert / replace user embedding
+                emb_id = str(uuid.uuid4())
+                cur.execute("DELETE FROM user_embeddings WHERE user_id = ?", (user_id,))
+                cur.execute(
+                    """
+                    INSERT INTO user_embeddings (id, user_id, embedding, model_version, source, created_at)
+                    VALUES (?, ?, ?, 'arcface_mobilefacenet_v1', 'local_folder', ?)
+                    """,
+                    (emb_id, user_id, emb_bytes, now_iso),
+                )
+
+                # Queue for server sync via outbox
+                outbox_payload = {
+                    "user_id": user_id,
+                    "name": user_name,
+                    "employee_id": emp_id,
+                    "embedding_b64": base64.b64encode(emb_bytes).decode("utf-8"),
+                    "photo_b64": base64.b64encode(primary_avatar_bytes).decode("utf-8") if primary_avatar_bytes else "",
+                    "quality_score": 1.0,
+                }
+                cur.execute(
+                    """
+                    INSERT INTO outbox (event_id, type, payload, created_at, synced, retry_count)
+                    VALUES (?, 'user_enrollment', ?, ?, 0, 0)
+                    """,
+                    (user_id, json.dumps(outbox_payload), now_iso),
+                )
+
+                conn.commit()
+                any_enrolled = True
+                logger.info("✅ Enrolled employee %s (%s) from local folder with %d image(s)", emp_id, user_name, len(captured_embeddings))
+
+            # Move processed images to processed directory
+            target_dest_dir = processed_dir / emp_id
+            target_dest_dir.mkdir(parents=True, exist_ok=True)
+            for img_p in img_paths:
+                try:
+                    dest_file = target_dest_dir / img_p.name
+                    if dest_file.exists():
+                        dest_file.unlink()
+                    shutil.move(str(img_p), str(dest_file))
+                except Exception as move_err:
+                    logger.debug("Failed moving %s: %s", img_p, move_err)
+
+            # If it was an empty subfolder, remove it
+            subfolder = enroll_dir / emp_id
+            if subfolder.is_dir() and not any(subfolder.iterdir()):
+                try:
+                    subfolder.rmdir()
+                except Exception:
+                    pass
+
+        conn.close()
+
+        if any_enrolled and self.on_enrollment_done:
+            self.on_enrollment_done()
